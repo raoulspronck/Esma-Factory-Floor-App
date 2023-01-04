@@ -191,3 +191,7 @@ tspan {
     0 8px 17px rgba(#444, 0.4), 2px 1px 4px rgba(#444, 0.25),
     -2px 1px 4px rgba(#444, 0.25), 0 9px 16px rgba(#444, 0.1);
 }
+
+.taskbarSelect option {
+  color: RGBA(0, 0, 0, 0.64);
+}

@@ -7,7 +7,7 @@
     "distDir": "../build"
   },
   "package": {
-    "productName": "RS232 app",
+    "productName": "Exalise RS232 monitoring software",
     "version": "0.1.0"
   },
   "tauri": {
@@ -29,8 +29,8 @@
         "icons/icon.icns",
         "icons/icon.ico"
       ],
-      "identifier": "com.tauri.dev",
-      "longDescription": "",
+      "identifier": "com.exalise.rs232-monitoring-software",
+      "longDescription": "RS232 software writen by exalise to monitor cnc machines and transfer files between them",
       "macOS": {
         "entitlements": null,
         "exceptionDomain": "",
@@ -44,7 +44,10 @@
       "windows": {
         "certificateThumbprint": null,
         "digestAlgorithm": "sha256",
-        "timestampUrl": ""
+        "timestampUrl": "",
+        "wix": {
+          "language": ["en-US", "nl-NL"]
+        }
       }
     },
     "security": {
@@ -56,10 +59,10 @@
     "windows": [
       {
         "fullscreen": false,
-        "height": 600,
+        "height": 1024,
         "resizable": true,
-        "title": "RS232 app",
-        "width": 800
+        "title": "Exalise RS232 monitoring software",
+        "width": 1280
       }
     ]
   }

@@ -1,11 +1,11 @@
 // 1. import `extendTheme` function
-import { extendTheme } from "@chakra-ui/react";
+import { extendTheme, ThemeConfig } from "@chakra-ui/react";
 import { createBreakpoints } from "@chakra-ui/theme-tools";
 // 2. Add your color mode config
 const config = {
   initialColorMode: "light",
   useSystemColorMode: false,
-} as any;
+} as ThemeConfig;
 
 const breakpoints = createBreakpoints({
   sm: "700px",
