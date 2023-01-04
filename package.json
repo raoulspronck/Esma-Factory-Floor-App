@@ -1,0 +1,50 @@
+{
+  "name": "werkorderviewer",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@chakra-ui/icons": "^2.0.2",
+    "@chakra-ui/react": "^2.2.0",
+    "@tauri-apps/api": "^1.0.0-rc.6",
+    "formik": "^2.2.9",
+    "react": "^18.1.0",
+    "react-dom": "^18.1.0",
+    "react-icons": "^4.4.0",
+    "react-scripts": "^5.0.1",
+    "tauri-plugin-store-api": "github:tauri-apps/tauri-plugin-store",
+    "typescript": "^4.7.3",
+    "web-vitals": "^2.1.4"
+  },
+  "scripts": {
+    "start": "cross-env BROWSER=none react-scripts start",
+    "dev": "tauri dev",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "tauri": "tauri"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^1.0.0-rc.11",
+    "@types/react": "^18.0.12",
+    "@types/react-dom": "^18.0.5",
+    "cross-env": "^7.0.3"
+  }
+}
