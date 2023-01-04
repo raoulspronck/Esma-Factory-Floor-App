@@ -676,7 +676,7 @@ function App() {
               fontWeight={"medium"}
               p="5"
             >
-              {error == "Thread already started" ? (
+              {error === "Thread already started" ? (
                 <Flex alignItems={"center"} flexDir="column">
                   <Text>{error}</Text>
 
