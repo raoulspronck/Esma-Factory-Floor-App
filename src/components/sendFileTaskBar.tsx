@@ -45,8 +45,8 @@ const SendFileTaskBar: React.FC<SendFileTaskBarProps> = ({
         Status:
       </Text>
 
-      {error == "" ? (
-        fileSendStatus == "Send completed" ? (
+      {error === "" ? (
+        fileSendStatus === "Send completed" ? (
           <Flex
             width={["150px", "160px", "180px"]}
             alignItems="center"
@@ -64,7 +64,7 @@ const SendFileTaskBar: React.FC<SendFileTaskBarProps> = ({
             <Text>Transfer completed</Text>
             <Spacer />
           </Flex>
-        ) : fileSendStatus == "Started transfer" ? (
+        ) : fileSendStatus === "Started transfer" ? (
           <>
             <Flex
               width={["95px", "100px", "110px"]}
@@ -84,7 +84,7 @@ const SendFileTaskBar: React.FC<SendFileTaskBarProps> = ({
               <Spacer />
             </Flex>
 
-            {fileSendProgress != "" ? (
+            {fileSendProgress !== "" ? (
               <>
                 <Box
                   mr={[1, 2]}
@@ -125,7 +125,7 @@ const SendFileTaskBar: React.FC<SendFileTaskBarProps> = ({
               </>
             ) : null}
           </>
-        ) : fileSendStatus == "Pauzed" ? (
+        ) : fileSendStatus === "Pauzed" ? (
           <Flex
             width={["90px", "100px", "110px"]}
             alignItems="center"

@@ -16,7 +16,7 @@ import {
   useBreakpointValue,
   useToast,
 } from "@chakra-ui/react";
-import React, { useState } from "react";
+import React from "react";
 import { Store } from "tauri-plugin-store-api";
 
 interface ExaliseSettingModalProps {

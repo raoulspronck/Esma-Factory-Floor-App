@@ -2,11 +2,9 @@ import {
   Box,
   Button,
   Checkbox,
-  CheckboxGroup,
   Flex,
   FormControl,
   FormLabel,
-  Icon,
   Input,
   InputGroup,
   InputRightAddon,
@@ -21,8 +19,6 @@ import {
   useBreakpointValue,
 } from "@chakra-ui/react";
 import React, { useState } from "react";
-import { GoFileDirectory } from "react-icons/go";
-import * as Dialog from "@tauri-apps/api/dialog";
 
 interface SaveInputModalProps {
   isOpen: boolean;
@@ -57,7 +53,7 @@ const SaveInputModal: React.FC<SaveInputModalProps> = ({
     const blob = new Blob(fileData, { type: "text/html" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.download = `${fileName != "" ? fileName : "input"}.txt`;
+    link.download = `${fileName !== "" ? fileName : "input"}.txt`;
     link.href = url;
     link.click();
   }

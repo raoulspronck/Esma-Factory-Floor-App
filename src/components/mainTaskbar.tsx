@@ -1,6 +1,5 @@
 import {
   Box,
-  Button,
   Checkbox,
   Flex,
   Icon,
@@ -17,7 +16,6 @@ import {
   IoMdSquare,
   IoMdPause,
   IoIosSave,
-  IoIosHelpCircle,
   IoIosHelp,
 } from "react-icons/io";
 import { MdWifiTethering, MdWifiTetheringOff } from "react-icons/md";
@@ -142,7 +140,7 @@ const MainTaskBar: React.FC<MainTaskBarProps> = ({
                 colorScheme={"blackAlpha"}
                 size={buttonSize}
                 ml={2}
-                isDisabled={exaliseConn && exaliseStatus != "disconnected"}
+                isDisabled={exaliseConn && exaliseStatus !== "disconnected"}
                 onClick={() => {
                   restartRs232Monitoring();
                   setlocalThreadStarted(true);
@@ -217,7 +215,7 @@ const MainTaskBar: React.FC<MainTaskBarProps> = ({
         Exalise
       </Text>
 
-      {exaliseStatus == "disconnected" && TrheadStarted && exaliseConn ? (
+      {exaliseStatus === "disconnected" && TrheadStarted && exaliseConn ? (
         <Flex
           width={["110px", "130px", "140px"]}
           alignItems="center"
@@ -235,7 +233,7 @@ const MainTaskBar: React.FC<MainTaskBarProps> = ({
           <Text>connecting...</Text>
           <Spacer />
         </Flex>
-      ) : exaliseStatus == "disconnected" ? (
+      ) : exaliseStatus === "disconnected" ? (
         <Flex
           width={["110px", "130px", "140px"]}
           alignItems="center"
@@ -255,7 +253,7 @@ const MainTaskBar: React.FC<MainTaskBarProps> = ({
         </Flex>
       ) : null}
 
-      {exaliseStatus == "connected" && !TrheadStarted && exaliseConn ? (
+      {exaliseStatus === "connected" && !TrheadStarted && exaliseConn ? (
         <Flex
           width={["110px", "130px", "140px"]}
           alignItems="center"
@@ -273,7 +271,7 @@ const MainTaskBar: React.FC<MainTaskBarProps> = ({
           <Text>disconnecting...</Text>
           <Spacer />
         </Flex>
-      ) : exaliseStatus == "connected" ? (
+      ) : exaliseStatus === "connected" ? (
         <Flex
           width={["110px", "130px", "140px"]}
           alignItems="center"

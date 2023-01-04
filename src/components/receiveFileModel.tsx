@@ -306,7 +306,7 @@ const ReceiveFileModal: React.FC<ReceiveFileModalProps> = ({
         </ModalBody>
 
         <ModalFooter>
-          {error == "" ? null : (
+          {error === "" ? null : (
             <Text
               color="red"
               fontSize={["12px", "14px", "16px"]}

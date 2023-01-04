@@ -45,8 +45,8 @@ const ReceiveFileTaskbar: React.FC<ReceiveFileTaskbarProps> = ({
         Status:
       </Text>
 
-      {error == "" ? (
-        fileSendStatus == "Finished file" ? (
+      {error === "" ? (
+        fileSendStatus === "Finished file" ? (
           <>
             <Flex
               width={["150px", "160px", "180px"]}
@@ -80,7 +80,7 @@ const ReceiveFileTaskbar: React.FC<ReceiveFileTaskbarProps> = ({
               </Text>
             </Box>
           </>
-        ) : fileSendStatus == "Ready to receive" ? (
+        ) : fileSendStatus === "Ready to receive" ? (
           <Flex
             width={["150px", "160px", "170px"]}
             alignItems="center"
@@ -98,7 +98,7 @@ const ReceiveFileTaskbar: React.FC<ReceiveFileTaskbarProps> = ({
             <Text>Ready to receive file</Text>
             <Spacer />
           </Flex>
-        ) : fileSendStatus == "Started reading" ? (
+        ) : fileSendStatus === "Started reading" ? (
           <>
             <Flex
               width={["95px", "100px", "110px"]}

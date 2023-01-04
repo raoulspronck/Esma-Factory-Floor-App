@@ -228,9 +228,9 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
               <Box mt={3}>
                 <FormControl>
                   <Checkbox
-                    isChecked={softwareBreaks == 1}
+                    isChecked={softwareBreaks === 1}
                     onChange={(i) => {
-                      setSoftwareBreaks((e) => (e == 0 ? 1 : 0));
+                      setSoftwareBreaks((e) => (e === 0 ? 1 : 0));
                     }}
                     size={buttonSize}
                   >
@@ -241,7 +241,7 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
                 </FormControl>
               </Box>
 
-              {softwareBreaks == 1 ? (
+              {softwareBreaks === 1 ? (
                 <Flex mt={3}>
                   <Box mr={2}>
                     <FormControl>
@@ -290,9 +290,9 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
               <Box mt={3}>
                 <FormControl>
                   <Checkbox
-                    isChecked={enableBreaks == 1}
+                    isChecked={enableBreaks === 1}
                     onChange={(i) => {
-                      setEnableBreaks((e) => (e == 0 ? 1 : 0));
+                      setEnableBreaks((e) => (e === 0 ? 1 : 0));
                     }}
                     size={buttonSize}
                   >
@@ -303,7 +303,7 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
                 </FormControl>
               </Box>
 
-              {enableBreaks == 1 ? (
+              {enableBreaks === 1 ? (
                 <Flex mt={3}>
                   <Box mr={2}>
                     <FormControl>
@@ -356,7 +356,7 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
         </ModalBody>
 
         <ModalFooter>
-          {error == "" ? null : (
+          {error === "" ? null : (
             <Text
               color="red"
               fontSize={["12px", "14px", "16px"]}
