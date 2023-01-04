@@ -1,14 +1,17 @@
 {
-  "name": "werkorderviewer",
+  "name": "exalise-rs232-monitoring-software",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
     "@chakra-ui/icons": "^2.0.2",
     "@chakra-ui/react": "^2.2.0",
+    "@emotion/react": "^11.10.5",
+    "@emotion/styled": "^11.10.5",
     "@tauri-apps/api": "^1.0.0-rc.6",
     "formik": "^2.2.9",
     "react": "^18.1.0",
     "react-dom": "^18.1.0",
+    "react-hot-keys": "^2.7.2",
     "react-icons": "^4.4.0",
     "react-scripts": "^5.0.1",
     "tauri-plugin-store-api": "github:tauri-apps/tauri-plugin-store",
