@@ -67,8 +67,6 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
   const [stop, setStop] = useState(19);
   const [resume, setResume] = useState(17);
 
-  const [portsAv, setPortsAv] = useState<string[]>([]);
-
   useEffect(() => {
     const store = new Store(".settings.dat");
 
@@ -149,18 +147,6 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
       )
       .catch((_e) => null);
   }, []);
-
-  useEffect(() => {
-    getAllAvailbleComs();
-  }, []);
-
-  const getAllAvailbleComs = () => {
-    invoke("get_all_availble_ports")
-      .then((message) => {
-        setPortsAv(message as string[]);
-      })
-      .catch((error) => console.error(error));
-  };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} size={modalSize}>

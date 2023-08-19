@@ -1,20 +1,14 @@
 import {
-  useBreakpointValue,
   useToast,
   Modal,
-  Box,
   ModalOverlay,
   ModalContent,
   ModalHeader,
   ModalCloseButton,
   ModalBody,
-  FormControl,
-  FormLabel,
   Text,
-  Select,
   ModalFooter,
   Button,
-  Flex,
   Checkbox,
   CheckboxGroup,
 } from "@chakra-ui/react";
@@ -87,7 +81,7 @@ const AddDevicesToDashboardModal: React.FC<AddDevicesToDashboardModalProps> = ({
         dashboard: newDashboard,
       })
         .then((i) => {
-          if (i == "saved") {
+          if (i === "saved") {
             setDashboard(newDashboard);
             res(true);
           }

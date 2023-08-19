@@ -1,10 +1,5 @@
 import {
-  Box,
   Button,
-  Flex,
-  FormControl,
-  FormLabel,
-  Input,
   Modal,
   ModalBody,
   ModalCloseButton,
@@ -13,9 +8,7 @@ import {
   ModalHeader,
   ModalOverlay,
   useBreakpointValue,
-  useToast,
 } from "@chakra-ui/react";
-import { invoke } from "@tauri-apps/api";
 import React from "react";
 
 interface ErrorLogProps {

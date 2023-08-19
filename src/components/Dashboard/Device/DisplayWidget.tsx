@@ -57,14 +57,14 @@ const DisplayWidget: React.FC<DisplayWidgetProps> = ({
     let widgetHeight = 1;
 
     if (
-      widget.name == "Circular progress" ||
-      widget.name == "Circular progress with variable color"
+      widget.name === "Circular progress" ||
+      widget.name === "Circular progress with variable color"
     ) {
       widgetHeight = 3;
     }
 
     const newLayout = dashboard.layout.map((e) => {
-      if (e.i == deviceId) {
+      if (e.i === deviceId) {
         let newLay = e;
         newLay.h = e.h - widgetHeight;
         return newLay;
@@ -73,13 +73,13 @@ const DisplayWidget: React.FC<DisplayWidgetProps> = ({
     });
 
     const newDevices = dashboard.devices.map((e) => {
-      if (e.id == deviceId) {
+      if (e.id === deviceId) {
         return {
           id: e.id,
           name: e.name,
           key: e.key,
           display: true,
-          widgets: e.widgets.filter((i: any) => i.id != widget.id),
+          widgets: e.widgets.filter((i: any) => i.id !== widget.id),
         };
       }
 

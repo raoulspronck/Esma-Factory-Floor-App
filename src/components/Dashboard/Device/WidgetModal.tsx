@@ -13,7 +13,6 @@ import {
   Radio,
   RadioGroup,
   Stat,
-  StatArrow,
   StatHelpText,
   StatLabel,
   StatNumber,
@@ -24,7 +23,6 @@ import { invoke } from "@tauri-apps/api";
 import React, { useState } from "react";
 import { v4 } from "uuid";
 import CircularProgressWidget from "./WidgetExample/circularProgressWidget";
-import CustomValue from "./WidgetExample/CustomValue";
 import TimerWidget from "./WidgetExample/TimerWidget";
 import WidgetSetup from "./WidgetSetup";
 
@@ -86,8 +84,8 @@ const WidgetModal: React.FC<WidgetModalProps> = ({
     let widgetHeight = 1;
 
     if (
-      finalWidget == "Circular progress" ||
-      finalWidget == "Circular progress with variable color"
+      finalWidget === "Circular progress" ||
+      finalWidget === "Circular progress with variable color"
     ) {
       widgetHeight = 3;
     }

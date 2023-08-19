@@ -75,8 +75,8 @@ const DeviceWidget: React.FC<DeviceWidgetProps> = ({
 
   const deleteDevice = async () => {
     const newDashboard = {
-      layout: dashboard.layout.filter((e) => e.i != deviceBlock.id),
-      devices: dashboard.devices.filter((e) => e.id != deviceBlock.id),
+      layout: dashboard.layout.filter((e) => e.i !== deviceBlock.id),
+      devices: dashboard.devices.filter((e) => e.id !== deviceBlock.id),
     };
 
     console.log(newDashboard);
@@ -88,7 +88,7 @@ const DeviceWidget: React.FC<DeviceWidgetProps> = ({
     setLoading(true);
 
     const newDevices = dashboard.devices.map((e) => {
-      if (e.id == deviceBlock.id) {
+      if (e.id === deviceBlock.id) {
         return {
           id: deviceBlock.id,
           name: deviceBlock.name,
@@ -110,7 +110,7 @@ const DeviceWidget: React.FC<DeviceWidgetProps> = ({
       },
     })
       .then((i) => {
-        if (i == "saved") {
+        if (i === "saved") {
           setDashboard({
             layout: dashboard.layout,
             devices: newDevices,
@@ -137,9 +137,9 @@ const DeviceWidget: React.FC<DeviceWidgetProps> = ({
       functionCalled.current = true;
 
       listen(`notification-${deviceBlock.key}`, (event) => {
-        if (event.payload == "connected") {
+        if (event.payload === "connected") {
           setConnected(true);
-        } else if (event.payload == "disconnected") {
+        } else if (event.payload === "disconnected") {
           setConnected(false);
         }
       });
@@ -162,7 +162,7 @@ const DeviceWidget: React.FC<DeviceWidgetProps> = ({
         position={"relative"}
       >
         <Text fontSize={"20px"}>{deviceBlock.name}</Text>
-        {connected == null ? null : connected == true ? (
+        {connected === null ? null : connected === true ? (
           <Box
             height={"15px"}
             width="15px"

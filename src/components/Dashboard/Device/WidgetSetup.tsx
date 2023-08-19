@@ -53,7 +53,7 @@ const WidgetSetup: React.FC<WidgetSetupProps> = ({
             </FormControl>
           </Box>
 
-          {finalWidget == "Circular progress" ? null : (
+          {finalWidget === "Circular progress" ? null : (
             <Box mt={5}>
               <FormControl>
                 <FormLabel fontSize={["sm", "md", "lg"]}>
@@ -64,15 +64,15 @@ const WidgetSetup: React.FC<WidgetSetupProps> = ({
                   size={buttonSize}
                   ml="auto"
                   value={
-                    dataPointsSelected[0] == undefined
+                    dataPointsSelected[0] === undefined
                       ? ""
                       : dataPointsSelected[0]
                   }
                   onChange={(e) =>
                     setDataPointsSelected((i) => [
                       e.target.value,
-                      i[1] == undefined ? "" : i[1],
-                      i[2] == undefined ? "" : i[2],
+                      i[1] === undefined ? "" : i[1],
+                      i[2] === undefined ? "" : i[2],
                     ])
                   }
                 >
@@ -97,15 +97,15 @@ const WidgetSetup: React.FC<WidgetSetupProps> = ({
                 size={buttonSize}
                 ml="auto"
                 value={
-                  dataPointsSelected[1] == undefined
+                  dataPointsSelected[1] === undefined
                     ? ""
                     : dataPointsSelected[1]
                 }
                 onChange={(e) =>
                   setDataPointsSelected((i) => [
-                    i[0] == undefined ? "" : i[0],
+                    i[0] === undefined ? "" : i[0],
                     e.target.value,
-                    i[2] == undefined ? "" : i[2],
+                    i[2] === undefined ? "" : i[2],
                   ])
                 }
               >
@@ -129,15 +129,15 @@ const WidgetSetup: React.FC<WidgetSetupProps> = ({
                 size={buttonSize}
                 ml="auto"
                 value={
-                  dataPointsSelected[2] == undefined
+                  dataPointsSelected[2] === undefined
                     ? ""
                     : dataPointsSelected[2]
                 }
                 onChange={(e) =>
                   setDataPointsSelected((i) => [
-                    i[0] == undefined ? "" : i[0],
+                    i[0] === undefined ? "" : i[0],
 
-                    i[1] == undefined ? "" : i[1],
+                    i[1] === undefined ? "" : i[1],
                     e.target.value,
                   ])
                 }

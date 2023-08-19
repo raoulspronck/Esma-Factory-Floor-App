@@ -64,8 +64,6 @@ const ReceiveFileModal: React.FC<ReceiveFileModalProps> = ({
   const modalSize = useBreakpointValue(["sm", "lg", "2xl"]);
   const buttonSize = useBreakpointValue(["sm", "md", "lg"]);
 
-  const [portsAv, setPortsAv] = useState<string[]>([]);
-
   useEffect(() => {
     const store = new Store(".settings.dat");
 
@@ -124,18 +122,6 @@ const ReceiveFileModal: React.FC<ReceiveFileModalProps> = ({
       )
       .catch((_e) => null);
   }, []);
-
-  useEffect(() => {
-    getAllAvailbleComs();
-  }, []);
-
-  const getAllAvailbleComs = () => {
-    invoke("get_all_availble_ports")
-      .then((message) => {
-        setPortsAv(message as string[]);
-      })
-      .catch((error) => console.error(error));
-  };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} size={modalSize}>
