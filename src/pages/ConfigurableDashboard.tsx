@@ -1,3 +1,5 @@
+/* eslint no-unused-vars: 0 */
+
 import {
   Box,
   Button,
@@ -64,7 +66,7 @@ const ConfigurableDashboard: React.FC<ConfigurableDashboardProps> = ({
       },
     })
       .then((i) => {
-        if (i == "saved") {
+        if (i === "saved") {
           setDashboard((dash) => {
             return {
               layout: newLayout,

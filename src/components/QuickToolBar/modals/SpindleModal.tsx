@@ -23,7 +23,9 @@ interface SpindleModalProps {
 const SpindleModal: React.FC<SpindleModalProps> = ({ isOpen, onClose }) => {
   const [vraagIndex, setVraagIndex] = useState(0);
   const [vraagIndex2, setVraagIndex2] = useState(0);
-  const [vragen, _setVragen] = useState([
+
+  // eslint-disable-next-line  no-unused-vars
+  const [vragen, setVragen] = useState([
     {
       id: 0,
       vraag: "Wat is de spindel type?",
@@ -55,7 +57,9 @@ const SpindleModal: React.FC<SpindleModalProps> = ({ isOpen, onClose }) => {
     },
   ]);
   const [spindleID, setSpindleID] = useState(undefined);
-  const [spindles, _setSpindles] = useState([
+
+  // eslint-disable-next-line  no-unused-vars
+  const [spindles, setSpindles] = useState([
     {
       id: 476,
       foto: "476.png",

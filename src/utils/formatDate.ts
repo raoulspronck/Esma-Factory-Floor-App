@@ -1,5 +1,7 @@
 export const formatDate = (time: string, offset?: number) => {
-  if (time === "" || time == undefined) time = new Date().toISOString();
+  if (time === "" || time === undefined) {
+    time = new Date().toISOString();
+  }
 
   /* conversion to local */
   var tzoffset: number;

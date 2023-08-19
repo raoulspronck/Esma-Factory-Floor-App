@@ -32,7 +32,7 @@ const LoginModal: React.FC<LoginModalProps> = ({
   const firstInput = useRef(null);
 
   useEffect(() => {
-    if (code.length == 4) {
+    if (code.length === 4) {
       if (code === "1234") {
         toast({
           title: "Succesvol ingelogd",
@@ -48,7 +48,7 @@ const LoginModal: React.FC<LoginModalProps> = ({
         status: "error",
       });
       setCode("");
-      if (firstInput.current != null) {
+      if (firstInput.current !== null) {
         firstInput.current.focus();
       }
     }

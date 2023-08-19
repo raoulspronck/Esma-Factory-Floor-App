@@ -130,7 +130,7 @@ const DeviceWidget: React.FC<DeviceWidgetProps> = ({
         setDataPoints(JSON.parse(e as string).dataPoint);
       })
       .catch((er) => console.log(er));
-  }, []);
+  }, [deviceBlock.id]);
 
   useEffect(() => {
     if (!functionCalled.current) {
@@ -144,7 +144,7 @@ const DeviceWidget: React.FC<DeviceWidgetProps> = ({
         }
       });
     }
-  }, []);
+  }, [deviceBlock.key]);
 
   return (
     <Box

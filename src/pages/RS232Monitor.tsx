@@ -34,7 +34,7 @@ const RS232Monitor: React.FC<RS232MonitorProps> = ({ setError }) => {
           },
         ]);
 
-        if (endOfDiv.current != null && autoScroll.current) {
+        if (endOfDiv.current !== null && autoScroll.current) {
           endOfDiv.current.scrollIntoView();
         }
       });

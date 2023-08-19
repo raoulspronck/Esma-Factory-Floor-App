@@ -507,7 +507,7 @@ const TaskBar: React.FC<TaskBarProps> = ({
                 View
               </MenuButton>
               <MenuList minWidth="240px" bgColor="twitter.400">
-                {page == 0 ? (
+                {page === 0 ? (
                   <>
                     <MenuItem
                       onClick={() => setlayoutChangable(true)}

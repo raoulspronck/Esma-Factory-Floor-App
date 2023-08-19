@@ -3,7 +3,7 @@ import { Box, Text } from "@chakra-ui/react";
 
 interface TimerWidgetProps {}
 
-const TimerWidget: React.FC<TimerWidgetProps> = ({}) => {
+const TimerWidget: React.FC<TimerWidgetProps> = () => {
   return (
     <Box width={"100%"}>
       <Box

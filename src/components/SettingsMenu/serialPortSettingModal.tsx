@@ -24,7 +24,6 @@ import {
 import { invoke } from "@tauri-apps/api";
 import React, { useEffect, useState } from "react";
 import { BiRefresh } from "react-icons/bi";
-import { Store } from "tauri-plugin-store-api";
 
 interface SerialPortSettingModalProps {
   isOpen: boolean;
@@ -130,7 +129,9 @@ const SerialPortSettingModal: React.FC<SerialPortSettingModalProps> = ({
                   aria-label="Load available ports"
                   onClick={() => {
                     getAllAvailbleComs();
-                    if (portsAv.length > 0) setPort(portsAv[0]);
+                    if (portsAv.length > 0) {
+                      setPort(portsAv[0]);
+                    }
                   }}
                 />
               </Flex>

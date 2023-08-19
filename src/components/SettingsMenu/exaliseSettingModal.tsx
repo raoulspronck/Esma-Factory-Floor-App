@@ -18,7 +18,6 @@ import {
 } from "@chakra-ui/react";
 import { invoke } from "@tauri-apps/api";
 import React from "react";
-import { Store } from "tauri-plugin-store-api";
 
 interface ExaliseSettingModalProps {
   isOpen: boolean;

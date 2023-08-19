@@ -92,7 +92,7 @@ const ManageAlertsModal: React.FC<ManageAlertsModalProps> = ({
   }, []);
 
   useEffect(() => {
-    if (device == "") {
+    if (device === "") {
       setDatapoints([]);
     } else {
       getDatapoints();
@@ -169,7 +169,7 @@ const ManageAlertsModal: React.FC<ManageAlertsModalProps> = ({
                   </Select>
                 </FormControl>
               </Box>
-              {device == "" ? null : (
+              {device === "" ? null : (
                 <Box mt={[-2, 0, 2]}>
                   <FormControl>
                     <FormLabel fontSize={["sm", "md", "lg"]}>
@@ -196,7 +196,7 @@ const ManageAlertsModal: React.FC<ManageAlertsModalProps> = ({
                 <Button
                   colorScheme="twitter"
                   onClick={() => {
-                    if (device != "" && datapoint != "") {
+                    if (device !== "" && datapoint !== "") {
                       setLocalAlerts((e) => [
                         {
                           device_key: device,

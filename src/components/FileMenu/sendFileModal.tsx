@@ -24,7 +24,6 @@ import {
   Text,
   useBreakpointValue,
 } from "@chakra-ui/react";
-import { invoke } from "@tauri-apps/api";
 import * as Dialog from "@tauri-apps/api/dialog";
 import React, { useEffect, useState } from "react";
 import { BsChevronDown, BsChevronRight } from "react-icons/bs";
@@ -186,7 +185,7 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
                       ],
                     })
                       .then((e) => {
-                        if (e != null) {
+                        if (e !== null) {
                           const pathToFile = e as string;
 
                           setFilePathFile(pathToFile);

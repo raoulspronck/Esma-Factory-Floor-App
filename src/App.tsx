@@ -134,7 +134,9 @@ const Viewpager: React.FC<ViewpagerInterface> = ({
   }));
   const bind: any = useDrag(
     ({ active, movement: [mx], direction: [xDir], cancel }) => {
-      if (changingLayout) return;
+      if (changingLayout) {
+        return;
+      }
 
       if (active && Math.abs(mx) > width / 4) {
         index.current = clamp(
@@ -146,8 +148,9 @@ const Viewpager: React.FC<ViewpagerInterface> = ({
       }
 
       api.start((i) => {
-        if (i < index.current - 1 || i > index.current + 1)
+        if (i < index.current - 1 || i > index.current + 1) {
           return { display: "none" };
+        }
         const x = (i - index.current) * width + (active ? mx : 0);
         const scale = active ? 1 - Math.abs(mx) / width / 4 : 1;
         return { x, scale, display: "block" };

@@ -24,7 +24,6 @@ import {
   Text,
   useBreakpointValue,
 } from "@chakra-ui/react";
-import { invoke } from "@tauri-apps/api";
 import * as Dialog from "@tauri-apps/api/dialog";
 import React, { useEffect, useState } from "react";
 import { BsChevronDown, BsChevronRight } from "react-icons/bs";
@@ -168,7 +167,7 @@ const ReceiveFileModal: React.FC<ReceiveFileModalProps> = ({
                       multiple: false,
                     })
                       .then((e) =>
-                        e != null ? setFilePath(e as string) : null
+                        e !== null ? setFilePath(e as string) : null
                       )
                       .catch((e) => console.log("error", e));
                   }}
@@ -342,7 +341,9 @@ const ReceiveFileModal: React.FC<ReceiveFileModalProps> = ({
               }
 
               let newFilterDecimals = filterDecimals.reduce(function (a, b) {
-                if (a.indexOf(b) < 0) a.push(b);
+                if (a.indexOf(b) < 0) {
+                  a.push(b);
+                }
                 return a;
               }, []);
 
