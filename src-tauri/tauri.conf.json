@@ -8,7 +8,7 @@
   },
   "package": {
     "productName": "Exalise production monitoring software",
-    "version": "3.0.0"
+    "version": "1.0.0"
   },
   "tauri": {
     "allowlist": {
@@ -64,7 +64,15 @@
     },
 
     "updater": {
-      "active": false
+      "active": true,
+      "endpoints": [
+        "https://releases.myapp.com/{{target}}/{{arch}}/{{current_version}}"
+      ],
+      "dialog": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVENTkyRTY1NkM5MTgxNDMKUldSRGdaRnNaUzVaWFRUYXFtblA2OHFvMmJmOGMydnlyWWs4Rmc1UWNjZnJLeS8xdytaL0ppeEoK",
+      "windows": {
+        "installMode": "passive"
+      }
     },
     "windows": [
       {
