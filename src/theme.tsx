@@ -15,6 +15,21 @@ const breakpoints = createBreakpoints({
   "2xl": "2000px",
 });
 
+const components = {
+  Checkbox: {
+    baseStyle: {
+      icon: {
+        size: "40px", // works only when resetting defaultProps
+        fontSize: "40px",
+      },
+      control: {
+        height: "40px", // works only when resetting defaultProps
+        width: "40px",
+      },
+    },
+  },
+};
+
 // 3. extend the theme
-const theme = extendTheme({ config, breakpoints });
+const theme = extendTheme({ config, breakpoints, components });
 export default theme;

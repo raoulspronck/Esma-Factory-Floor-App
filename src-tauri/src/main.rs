@@ -1,870 +1,1040 @@
 #![cfg_attr(
-  all(not(debug_assertions), target_os = "windows"),
-  windows_subsystem = "windows"
+    all(not(debug_assertions), target_os = "windows"),
+    windows_subsystem = "windows"
 )]
 
-use serde_json::json;
-use std::fs;
-use std::fs::File;
-use std::io::Read;
-use std::io::{self, Write};
+mod main_struct;
+mod rs232;
+
+use crate::main_struct::{
+    Alert, Alerts, ApiSettings, Dashboard, Debiteur, Device, ExaliseHttpSettings,
+    ExaliseMqttSettings, ExaliseSettings, Layout, LoginData, RS232Settings,
+};
+use crate::rs232::{
+    automatic_start_rs232, start_file_receive, start_file_send, stop_file_receive, stop_file_send,
+    CONNECTED_TO_EXALISE,
+};
+
+use rumqttc::{AsyncClient, Event, LastWill, MqttOptions, Packet, QoS};
+use serde_json::Value;
+use serde_urlencoded;
+use serialport::available_ports;
 use std::str;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
-
+use std::sync::atomic::Ordering;
 use tauri::Manager;
+use tauri::State;
+use tokio::sync::Mutex;
+use tokio::time::Duration;
 
-use rumqttc::{Client, LastWill, MqttOptions, QoS};
-use serialport::{available_ports, DataBits, Parity, StopBits};
+pub struct MqttClient(Mutex<AsyncClient>);
 
-use tauri_plugin_store::PluginBuilder;
+pub struct BearerToken(String);
 
-static START_THREAD: AtomicBool = AtomicBool::new(false);
-static CONNECTED_TO_EXALISE: AtomicBool = AtomicBool::new(false);
+#[tokio::main]
+async fn main() {
+    //create a log file
+    if !std::path::Path::new(
+        "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/logs.txt",
+    )
+    .exists()
+    {
+        std::fs::File::create(
+            "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/logs.txt",
+        )
+        .unwrap();
+    }
 
-fn main() {
-  tauri::Builder::default()
-    .plugin(PluginBuilder::default().build())
-    .invoke_handler(tauri::generate_handler![
-      get_all_availble_ports,
-      start_rs232,
-      stop_rs232,
-      start_file_receive,
-      start_rs232_with_exalise,
-      stop_file_receive,
-      start_file_send
-    ])
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
-}
+    // Some JSON input data as a &str. Maybe this comes from the user.
+    let default_api_string = r#"
+    {
+        "username": "",
+        "password": ""    
+    }"#;
 
-#[tauri::command]
-fn stop_rs232() {
-  START_THREAD.store(false, Ordering::Relaxed);
-}
+    // Parse the string of data into serde_json::Value.
+    let default_api_json: ApiSettings = serde_json::from_str(default_api_string).unwrap();
 
-#[tauri::command]
-fn stop_file_receive(file_path: String) -> bool {
-  START_THREAD.store(false, Ordering::Relaxed);
+    let file_open = std::fs::read_to_string(
+        &"C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/api.settings.json",
+    );
 
-  match fs::remove_file(file_path) {
-    Ok(_s) => return true,
-    Err(_e) => return false,
-  }
-  // remove file
-}
+    let api_settings: ApiSettings;
 
-#[tauri::command]
-fn start_rs232_with_exalise(
-  port_name: String,
-  baud_rate: u32,
-  data_bits_number: u32,
-  parity_string: u32,
-  stop_bits_number: u32,
-  mqtt_key: String,
-  mqtt_secret: String,
-  device_key: String,
-  app_handle: tauri::AppHandle,
-) -> Result<String, String> {
-  if CONNECTED_TO_EXALISE.load(Ordering::Relaxed) {
-    return Err("Wacht tot exalise niet meer is verbonden".into());
-  }
+    match file_open {
+        Ok(v) => {
+            let res = serde_json::from_str::<ApiSettings>(&v);
 
-  if port_name == "" {
-    return Err("Geen port name gespecificeerd".into());
-  }
+            match res {
+                Ok(r) => {
+                    api_settings = r;
+                }
+                Err(_err) => {
+                    // save file with new settings
+                    // Save the JSON structure into the other file.
+                    std::fs::write(
+                        "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/api.settings.json",
+                        serde_json::to_string_pretty(&default_api_json).unwrap(),
+                    )
+                    .unwrap();
+                    api_settings = default_api_json;
+                }
+            }
+        }
+        Err(_e) => {
+            // save file with new settings
+            // Save the JSON structure into the other file.
+            std::fs::write(
+                "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/api.settings.json",
+                serde_json::to_string_pretty(&default_api_json).unwrap(),
+            )
+            .unwrap();
+            api_settings = default_api_json;
+        }
+    }
 
-  if baud_rate == 0 {
-    return Err("Geen baud rate gespecificeerd".into());
-  }
+    // Some JSON input data as a &str. Maybe this comes from the user.
+    let default_alerts_string = r#"
+    {
+        "alerts": []    
+    }"#;
 
-  let data_bits;
+    // Parse the string of data into serde_json::Value.
+    let default_alerts_json: Alerts = serde_json::from_str(default_alerts_string).unwrap();
 
-  match data_bits_number {
-    5 => data_bits = DataBits::Five,
-    6 => data_bits = DataBits::Six,
-    7 => data_bits = DataBits::Seven,
-    8 => data_bits = DataBits::Eight,
-    _ => return Err("Geen data bits gespecificeerd".into()),
-  }
+    let file_open = std::fs::read_to_string(
+        &"C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/alerts.exalise.json",
+    );
 
-  let parity;
+    match file_open {
+        Ok(v) => {
+            let res = serde_json::from_str::<Alerts>(&v);
 
-  match parity_string {
-    0 => parity = Parity::None,
-    1 => parity = Parity::Odd,
-    2 => parity = Parity::Even,
-    _ => return Err("Geen data bits gespecificeerd".into()),
-  }
+            match res {
+                Ok(_r) => {}
+                Err(_err) => {
+                    // save file with new settings
+                    // Save the JSON structure into the other file.
+                    std::fs::write(
+                        "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/alerts.exalise.json",
+                        serde_json::to_string_pretty(&default_alerts_json).unwrap(),
+                    )
+                    .unwrap();
+                }
+            }
+        }
+        Err(_e) => {
+            // save file with new settings
+            // Save the JSON structure into the other file.
+            std::fs::write(
+                "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/alerts.exalise.json",
+                serde_json::to_string_pretty(&default_alerts_json).unwrap(),
+            )
+            .unwrap();
+        }
+    }
 
-  let stop_bits;
+    // Some JSON input data as a &str. Maybe this comes from the user.
+    let default_dashboard_string = r#"
+        {
+            "layout": [],
+            "devices": []
+        }"#;
 
-  match stop_bits_number {
-    0 => stop_bits = StopBits::One,
-    1 => stop_bits = StopBits::Two,
-    _ => return Err("Geen data bits gespecificeerd".into()),
-  }
+    // Parse the string of data into serde_json::Value.
+    let default_dashboard_json: Dashboard = serde_json::from_str(default_dashboard_string).unwrap();
 
-  if mqtt_key == "" {
-    return Err("Geen mqtt key gespecificeerd".into());
-  }
+    let file_open = std::fs::read_to_string(
+        &"C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
+    );
 
-  if mqtt_secret == "" {
-    return Err("Geen mqtt secret gespecificeerd".into());
-  }
+    match file_open {
+        Ok(v) => {
+            let res = serde_json::from_str::<Dashboard>(&v);
 
-  if device_key == "" {
-    return Err("Geen device key gespecificeerd".into());
-  }
+            match res {
+                Ok(_r) => {}
+                Err(_err) => {
+                    // save file with new settings
+                    // Save the JSON structure into the other file.
+                    std::fs::write(
+                        "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
+                        serde_json::to_string_pretty(&default_dashboard_json).unwrap(),
+                    )
+                    .unwrap();
+                }
+            }
+        }
+        Err(_e) => {
+            // save file with new settings
+            // Save the JSON structure into the other file.
+            std::fs::write(
+                "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
+                serde_json::to_string_pretty(&default_dashboard_json).unwrap(),
+            )
+            .unwrap();
+        }
+    }
 
-  if !START_THREAD.load(Ordering::Relaxed) {
-    START_THREAD.store(true, Ordering::Relaxed);
-    let device_key_clone = device_key.clone();
+    // Some JSON input data as a &str. Maybe this comes from the user.
+    let default_settings_string = r#"
+        {
+            "mqtt_settings": {
+                "mqtt_key": "mqtt_key",
+                "mqtt_secret": "mqtt_secret",
+                "device_key": "device_key"
+            },
+            "http_settings": {
+                "http_key": "http_key",
+                "http_secret": "http_secret"
+            },
+            "rs232_settings": {
+                "port_name": "",
+                "baud_rate": 9600,
+                "data_bits_number": 8,
+                "parity_string": 0,
+                "stop_bits_number": 1
+            }
+        }"#;
 
-    std::thread::spawn(move || {
-      // Create a client.
-      let mut mqttoptions = MqttOptions::new(device_key, "mqtt.exalise.com", 1883);
+    // Parse the string of data into serde_json::Value.
+    let default_settings_json: ExaliseSettings =
+        serde_json::from_str(default_settings_string).unwrap();
 
-      let will = LastWill::new(
-        format!("exalise/lastwill/{}", device_key_clone),
+    let exalise_settings: ExaliseSettings;
+
+    let file_open = std::fs::read_to_string(
+        &"C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/settings.exalise.json",
+    );
+
+    match file_open {
+        Ok(v) => {
+            let res = serde_json::from_str::<ExaliseSettings>(&v);
+
+            match res {
+                Ok(r) => {
+                    exalise_settings = r;
+                }
+                Err(_err) => {
+                    exalise_settings = default_settings_json;
+                    // save file with new settings
+                    // Save the JSON structure into the other file.
+                    std::fs::write(
+                        "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/settings.exalise.json",
+                        serde_json::to_string_pretty(&exalise_settings).unwrap(),
+                    )
+                    .unwrap();
+                }
+            }
+        }
+        Err(_e) => {
+            exalise_settings = default_settings_json;
+            // save file with new settings
+            // Save the JSON structure into the other file.
+            std::fs::write(
+                "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/settings.exalise.json",
+                serde_json::to_string_pretty(&exalise_settings).unwrap(),
+            )
+            .unwrap();
+        }
+    }
+
+    let device_key = exalise_settings.mqtt_settings.device_key.clone();
+    let device_key_lastwill = device_key.clone();
+
+    let mqtt_key = exalise_settings.mqtt_settings.mqtt_key.clone();
+    let mqtt_secret = exalise_settings.mqtt_settings.mqtt_secret.clone();
+
+    let port_name = exalise_settings.rs232_settings.port_name.clone();
+    let baud_rate = exalise_settings.rs232_settings.baud_rate.clone();
+    let data_bits_number = exalise_settings.rs232_settings.data_bits_number.clone();
+    let parity_string = exalise_settings.rs232_settings.parity_string.clone();
+    let stop_bits_number = exalise_settings.rs232_settings.stop_bits_number.clone();
+
+    //connect to mqtt broker
+    let broker_url = "mqtt.exalise.com";
+    let broker_port = 1883;
+
+    let mut mqttoptions = MqttOptions::new(device_key, broker_url, broker_port);
+
+    let will = LastWill::new(
+        format!("exalise/lastwill/{}", device_key_lastwill),
         "disconnected",
         QoS::AtLeastOnce,
         false,
-      );
+    );
 
-      mqttoptions.set_last_will(will);
-      mqttoptions.set_credentials(mqtt_key, mqtt_secret);
-      mqttoptions.set_keep_alive(Duration::from_secs(5));
-      let (mut client, mut connection) = Client::new(mqttoptions, 10);
+    mqttoptions.set_last_will(will);
+    mqttoptions.set_credentials(mqtt_key, mqtt_secret);
+    mqttoptions.set_keep_alive(Duration::from_secs(5));
+    mqttoptions.set_clean_session(false);
 
-      let mut client_clone = client.clone();
-      let device_key_clone_clone = device_key_clone.clone();
-      let app_handle_clone = app_handle.clone();
+    let (client, mut eventloop) = AsyncClient::new(mqttoptions, 10);
 
-      std::thread::spawn(move || {
-        app_handle.emit_all("rs232-status", "started").unwrap();
-        'main: loop {
-          if !START_THREAD.load(Ordering::Relaxed) {
-            break 'main;
-          }
+    client
+        .subscribe("exalise/messages/#", QoS::AtMostOnce)
+        .await
+        .unwrap();
+    client
+        .subscribe("exalise/lastwill/#", QoS::AtMostOnce)
+        .await
+        .unwrap();
 
-          let port = serialport::new(port_name.clone(), baud_rate)
-            .data_bits(data_bits)
-            .stop_bits(stop_bits)
-            .parity(parity)
-            .timeout(Duration::from_millis(10))
-            .open();
+    let client_clone = client.clone();
+    let client_clone_clone = client.clone();
+    let device_key_clone = device_key_lastwill.clone();
+    let device_key_clone_clone = device_key_lastwill.clone();
 
-          match port {
-            Ok(mut port) => {
-              let mut serial_buf: Vec<u8> = vec![0; 1000];
-              let mut buf_size: usize = 0;
-              let mut line_buf: Vec<u8> = Vec::new();
-              let mut read_buf: Vec<u8> = Vec::new();
-              let mut read_buf_size: usize = 0;
+    tauri::Builder::default()
+        .manage(MqttClient(Mutex::new(client_clone)))
+        .manage(BearerToken("".into()))
+        .manage(exalise_settings)
+        .manage(api_settings)
+        .setup(move |app| {
+            let main_window = app.get_window("main").unwrap();
+            let main_window_2 = main_window.clone();
+            tauri::async_runtime::spawn(async move {
+                // receive incoming notifications
+                let mut connected = false;
+                loop {
+                    let notification = eventloop.poll().await;
 
-              'reading: loop {
-                if !START_THREAD.load(Ordering::Relaxed) {
-                  break 'main;
-                }
-                match port.read(serial_buf.as_mut_slice()) {
-                  Ok(t) => {
-                    for elem in &serial_buf[..t] {
-                      read_buf.insert(read_buf_size, *elem);
-                      read_buf_size += 1;
+                    match notification {
+                        Ok(s) => {
+                            println!("{:?}", s);
+                            if !connected {
+                                CONNECTED_TO_EXALISE.store(true, Ordering::Relaxed);
 
-                      // enkel charackters invoegen die je kunt lezen
-                      if *elem > 31 && *elem < 127 {
-                        line_buf.insert(buf_size, *elem);
-                        buf_size += 1;
-                      } else if *elem == 10 {
-                        match str::from_utf8(&line_buf[..buf_size]) {
-                          Ok(v) => {
-                            // split string
-                            let split = v.split("-").collect::<Vec<&str>>();
+                                main_window.emit("exalise-connection", "connected").unwrap();
 
-                            if split.len() == 2 && CONNECTED_TO_EXALISE.load(Ordering::Relaxed) {
-                              client
-                                .publish(
-                                  format!("exalise/messages/{}/{}", device_key_clone, split[0]),
-                                  QoS::AtLeastOnce,
-                                  false,
-                                  split[1].as_bytes().to_vec(),
-                                )
-                                .unwrap();
+                                client
+                                    .publish(
+                                        format!("exalise/lastwill/{}", device_key_clone),
+                                        QoS::AtLeastOnce,
+                                        false,
+                                        "connected".as_bytes().to_vec(),
+                                    )
+                                    .await
+                                    .unwrap();
+                                connected = true;
                             }
 
-                            let decimal: String = read_buf[..read_buf_size]
-                              .into_iter()
-                              .map(|i| format!("{i:?} "))
-                              .collect();
+                            if let Event::Incoming(Packet::Publish(p)) = s {
+                                let payload = str::from_utf8(p.payload.as_ref())
+                                    .expect("Error converting payload to string");
 
-                            let data = json!({
-                                "message": v,
-                                "decimal": decimal,
-                            });
+                                let topic = p.topic;
+                                let topic_split = topic.split("/");
 
-                            app_handle.emit_all("rs232", data.to_string()).unwrap();
+                                let vec_topic: Vec<&str> = topic_split.collect();
 
-                            line_buf = Vec::new();
-                            buf_size = 0;
-                            read_buf = Vec::new();
-                            read_buf_size = 0;
-                          }
-                          Err(_e) => {
-                            app_handle
-                              .emit_all("rs232-error", "Failed to read message")
-                              .unwrap();
-                            line_buf = Vec::new();
-                            buf_size = 0;
-                            read_buf = Vec::new();
-                            read_buf_size = 0;
-                          }
-                        };
-                      } else if buf_size > 1000 {
-                        match str::from_utf8(&line_buf[..buf_size]) {
-                          Ok(v) => {
-                            // split string
-                            let split = v.split("-").collect::<Vec<&str>>();
+                                if vec_topic[1] == "messages" {
+                                    if vec_topic.len() == 3 {
+                                        let s: String =
+                                            format!("notification-{}", vec_topic[2]).to_owned();
+                                        let s_slice: &str = &s[..];
 
-                            if split.len() == 2 && CONNECTED_TO_EXALISE.load(Ordering::Relaxed) {
-                              client
-                                .publish(
-                                  format!("exalise/messages/{}/{}", device_key_clone, split[0]),
-                                  QoS::AtLeastOnce,
-                                  false,
-                                  split[1].as_bytes().to_vec(),
-                                )
-                                .unwrap();
+                                        main_window.emit(s_slice, format!("{}", payload)).unwrap();
+                                    } else {
+                                        // remove key from topic
+                                        let datapoint_key_split = vec_topic[3].split("_");
+
+                                        let datapoint_key: Vec<&str> =
+                                            datapoint_key_split.collect();
+
+                                        let s: String = format!(
+                                            "notification-{}-{}",
+                                            vec_topic[2], datapoint_key[0]
+                                        )
+                                        .to_owned();
+                                        let s_slice: &str = &s[..];
+
+                                        main_window.emit(s_slice, format!("{}", payload)).unwrap();
+                                    }
+                                } else if vec_topic[1] == "lastwill" {
+                                    let s: String =
+                                        format!("notification-{}", vec_topic[2]).to_owned();
+                                    let s_slice: &str = &s[..];
+
+                                    main_window.emit(s_slice, format!("{}", payload)).unwrap();
+                                }
                             }
+                        }
+                        Err(e) => {
+                            std::fs::write(
+                                "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/logs.txt",
+                                format!("{:?}", e),
+                            )
+                            .unwrap();
 
-                            let decimal: String = read_buf[..read_buf_size]
-                              .into_iter()
-                              .map(|i| format!("{i:?} "))
-                              .collect();
-
-                            let data = json!({
-                                "message": v,
-                                "decimal": decimal,
-                            });
-
-                            app_handle.emit_all("rs232", data.to_string()).unwrap();
-
-                            line_buf = Vec::new();
-                            buf_size = 0;
-                            read_buf = Vec::new();
-                            read_buf_size = 0;
-                          }
-                          Err(_e) => {
-                            app_handle
-                              .emit_all("rs232-error", "Failed to read message")
-                              .unwrap();
-                            line_buf = Vec::new();
-                            buf_size = 0;
-                            read_buf = Vec::new();
-                            read_buf_size = 0;
-                          }
-                        };
-                      }
+                            if connected {
+                                CONNECTED_TO_EXALISE.store(false, Ordering::Relaxed);
+                                main_window
+                                    .emit("exalise-connection", "disconnected")
+                                    .unwrap();
+                                connected = false;
+                            }
+                        }
                     }
-                  }
-                  Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
-                  Err(_e) => {
-                    std::thread::sleep(Duration::from_millis(5));
-                    break 'reading;
-                  }
                 }
-              }
-            }
-            Err(_e) => {
-              app_handle
-                .emit_all("rs232-error", format!("Failed to open {}", port_name))
-                .unwrap();
-              std::thread::sleep(Duration::from_millis(5));
-            }
-          }
-        }
-
-        app_handle.emit_all("rs232-status", "stopped").unwrap();
-      });
-
-      for (_i, notification) in connection.iter().enumerate() {
-        if !START_THREAD.load(Ordering::Relaxed) {
-          break;
-        }
-
-        match notification {
-          Ok(_s) => {
-            if !CONNECTED_TO_EXALISE.load(Ordering::Relaxed) {
-              client_clone
-                .publish(
-                  format!("exalise/lastwill/{}", device_key_clone_clone),
-                  QoS::AtLeastOnce,
-                  false,
-                  "connected".as_bytes().to_vec(),
-                )
-                .unwrap();
-
-              CONNECTED_TO_EXALISE.store(true, Ordering::Relaxed);
-            }
-            app_handle_clone
-              .emit_all("exalise-connection", "connected")
-              .unwrap();
-          }
-          Err(_e) => {
-            if CONNECTED_TO_EXALISE.load(Ordering::Relaxed) {
-              CONNECTED_TO_EXALISE.store(false, Ordering::Relaxed);
-            }
-
-            app_handle_clone
-              .emit_all("exalise-connection", "disconnected")
-              .unwrap();
-          }
-        }
-      }
-
-      if CONNECTED_TO_EXALISE.load(Ordering::Relaxed) {
-        client_clone.cancel().unwrap();
-
-        app_handle_clone
-          .emit_all("exalise-connection", "disconnected")
-          .unwrap();
-
-        CONNECTED_TO_EXALISE.store(false, Ordering::Relaxed);
-      }
-    });
-    return Ok("Monitoring...".into());
-  } else {
-    return Err("Thread already started".into());
-  }
+            });
+            automatic_start_rs232(
+                port_name,
+                baud_rate,
+                data_bits_number,
+                parity_string,
+                stop_bits_number,
+                device_key_clone_clone,
+                main_window_2,
+                client_clone_clone,
+            );
+            Ok(())
+        })
+        .plugin(tauri_plugin_store::Builder::default().build())
+        .invoke_handler(tauri::generate_handler![
+            get_all_availble_ports,
+            start_file_receive,
+            stop_file_receive,
+            start_file_send,
+            stop_file_send,
+            save_exalise_mqtt_settings,
+            save_exalise_http_settings,
+            get_exalise_settings,
+            get_exalise_connection,
+            get_devices,
+            get_device,
+            get_dashboard,
+            save_device_to_dashboard,
+            save_widget_to_dashboard,
+            get_last_value,
+            save_dashboard_layout,
+            get_pdf_file,
+            save_rs232_settings,
+            save_alerts,
+            get_alerts,
+            get_debiteuren,
+            save_api_settings,
+            get_api_settings,
+            close_splashscreen
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
 }
 
 #[tauri::command]
-fn start_rs232(
-  port_name: String,
-  baud_rate: u32,
-  data_bits_number: u32,
-  parity_string: u32,
-  stop_bits_number: u32,
-  app_handle: tauri::AppHandle,
-) -> Result<String, String> {
-  if port_name == "" {
-    return Err("Geen poort naam gespecificeerd".into());
+async fn close_splashscreen(window: tauri::Window) {
+  // Close splashscreen
+  if let Some(splashscreen) = window.get_window("splashscreen") {
+    splashscreen.close().unwrap();
   }
-
-  if baud_rate == 0 {
-    return Err("Geen baud rate gespecificeerd".into());
-  }
-
-  let data_bits;
-
-  match data_bits_number {
-    5 => data_bits = DataBits::Five,
-    6 => data_bits = DataBits::Six,
-    7 => data_bits = DataBits::Seven,
-    8 => data_bits = DataBits::Eight,
-    _ => return Err("Geen data bits gespecificeerd".into()),
-  }
-
-  let parity;
-
-  match parity_string {
-    0 => parity = Parity::None,
-    1 => parity = Parity::Odd,
-    2 => parity = Parity::Even,
-    _ => return Err("Geen parity gespecificeerd".into()),
-  }
-
-  let stop_bits;
-
-  match stop_bits_number {
-    0 => stop_bits = StopBits::One,
-    1 => stop_bits = StopBits::Two,
-    _ => return Err("Geen stop bits gespecificeerd".into()),
-  }
-
-  if !START_THREAD.load(Ordering::Relaxed) {
-    START_THREAD.store(true, Ordering::Relaxed);
-
-    std::thread::spawn(move || {
-      app_handle.emit_all("rs232-status", "started").unwrap();
-      'main: loop {
-        if !START_THREAD.load(Ordering::Relaxed) {
-          break 'main;
-        }
-
-        let port = serialport::new(port_name.clone(), baud_rate)
-          .data_bits(data_bits)
-          .stop_bits(stop_bits)
-          .parity(parity)
-          .timeout(Duration::from_millis(10))
-          .open();
-
-        match port {
-          Ok(mut port) => {
-            app_handle.emit_all("rs232-error", "").unwrap();
-
-            let mut serial_buf: Vec<u8> = vec![0; 1000];
-            let mut line_buf: Vec<u8> = Vec::new();
-            let mut buf_size: usize = 0;
-            let mut read_buf: Vec<u8> = Vec::new();
-            let mut read_buf_size: usize = 0;
-
-            'reading: loop {
-              if !START_THREAD.load(Ordering::Relaxed) {
-                break 'main;
-              }
-              match port.read(serial_buf.as_mut_slice()) {
-                Ok(t) => {
-                  for elem in &serial_buf[..t] {
-                    read_buf.insert(read_buf_size, *elem);
-                    read_buf_size += 1;
-
-                    // enkel charackters invoegen die je kunt lezen
-                    if *elem > 31 && *elem < 127 {
-                      line_buf.insert(buf_size, *elem);
-                      buf_size += 1;
-                    } else if *elem == 10 {
-                      match str::from_utf8(&line_buf[..buf_size]) {
-                        Ok(v) => {
-                          let decimal: String = read_buf[..read_buf_size]
-                            .into_iter()
-                            .map(|i| format!("{i:?} "))
-                            .collect();
-
-                          let data = json!({
-                              "message": v,
-                              "decimal": decimal,
-                          });
-
-                          app_handle.emit_all("rs232", data.to_string()).unwrap();
-
-                          line_buf = Vec::new();
-                          buf_size = 0;
-                          read_buf = Vec::new();
-                          read_buf_size = 0;
-                        }
-                        Err(_e) => {
-                          app_handle
-                            .emit_all("rs232-error", "Failed to read message")
-                            .unwrap();
-                          line_buf = Vec::new();
-                          buf_size = 0;
-                          read_buf = Vec::new();
-                          read_buf_size = 0;
-                        }
-                      };
-                    } else if buf_size > 1000 {
-                      match str::from_utf8(&line_buf[..buf_size]) {
-                        Ok(v) => {
-                          let decimal: String = read_buf[..read_buf_size]
-                            .into_iter()
-                            .map(|i| format!("{i:?} "))
-                            .collect();
-
-                          let data = json!({
-                              "message": v,
-                              "decimal": decimal,
-                          });
-
-                          app_handle.emit_all("rs232", data.to_string()).unwrap();
-
-                          line_buf = Vec::new();
-                          buf_size = 0;
-                          read_buf = Vec::new();
-                          read_buf_size = 0;
-                        }
-                        Err(_e) => {
-                          app_handle
-                            .emit_all("rs232-error", "Failed to read message")
-                            .unwrap();
-                          line_buf = Vec::new();
-                          buf_size = 0;
-                          read_buf = Vec::new();
-                          read_buf_size = 0;
-                        }
-                      };
-                    }
-                  }
-                }
-                Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
-                Err(_e) => {
-                  std::thread::sleep(Duration::from_millis(5));
-                  break 'reading;
-                }
-              }
-            }
-          }
-          Err(_e) => {
-            app_handle
-              .emit_all("rs232-error", format!("Failed to open {}", port_name))
-              .unwrap();
-            std::thread::sleep(Duration::from_millis(5));
-          }
-        }
-      }
-      START_THREAD.store(false, Ordering::Relaxed);
-      app_handle.emit_all("rs232-status", "stopped").unwrap();
-    });
-    return Ok("Monitoring...".into());
-  } else {
-    return Err("Thread already started".into());
-  }
-}
-
-#[tauri::command]
-fn start_file_receive(
-  file_path: String,
-  port_name: String,
-  baud_rate: u32,
-  data_bits_number: u32,
-  parity_string: u32,
-  stop_bits_number: u32,
-  start_decimal: u8,
-  stop_decimal: u8,
-  forbidden_decimals: Vec<u8>,
-  app_handle: tauri::AppHandle,
-) -> Result<String, String> {
-  if file_path == "" {
-    return Err("Geen file path gespecificeerd".into());
-  }
-
-  if port_name == "" {
-    return Err("Geen port name gespecificeerd".into());
-  }
-
-  if baud_rate == 0 {
-    return Err("Geen baud rate gespecificeerd".into());
-  }
-
-  let data_bits;
-
-  match data_bits_number {
-    5 => data_bits = DataBits::Five,
-    6 => data_bits = DataBits::Six,
-    7 => data_bits = DataBits::Seven,
-    8 => data_bits = DataBits::Eight,
-    _ => return Err("Geen data bits gespecificeerd".into()),
-  }
-
-  let parity;
-
-  match parity_string {
-    0 => parity = Parity::None,
-    1 => parity = Parity::Odd,
-    2 => parity = Parity::Even,
-    _ => return Err("Geen data bits gespecificeerd".into()),
-  }
-
-  let stop_bits;
-
-  match stop_bits_number {
-    0 => stop_bits = StopBits::One,
-    1 => stop_bits = StopBits::Two,
-    _ => return Err("Geen data bits gespecificeerd".into()),
-  }
-
-  if !START_THREAD.load(Ordering::Relaxed) {
-    let f = File::create(file_path);
-
-    match f {
-      Ok(mut file) => {
-        START_THREAD.store(true, Ordering::Relaxed);
-        std::thread::spawn(move || {
-          app_handle.emit_all("rs232-status", "started").unwrap();
-          'main: loop {
-            if !START_THREAD.load(Ordering::Relaxed) {
-              break 'main;
-            }
-
-            let port = serialport::new(port_name.clone(), baud_rate)
-              .data_bits(data_bits)
-              .stop_bits(stop_bits)
-              .parity(parity)
-              .timeout(Duration::from_millis(10))
-              .open();
-
-            match port {
-              Ok(mut port) => {
-                app_handle.emit_all("rs232-error", "").unwrap();
-                app_handle
-                  .emit_all("rs232-file-send", "Ready to receive")
-                  .unwrap();
-                let mut serial_buf: Vec<u8> = vec![0; 1000];
-                let mut file_buf: Vec<u8> = Vec::new();
-                let mut file_buf_size: usize = 0;
-                let mut total_file_size: usize = 0;
-
-                let mut file_started: bool = false;
-
-                'reading: loop {
-                  if !START_THREAD.load(Ordering::Relaxed) {
-                    break 'main;
-                  }
-                  match port.read(serial_buf.as_mut_slice()) {
-                    Ok(t) => {
-                      for elem in &serial_buf[..t] {
-                        //print!("elem = {}  start = {}", *elem, start_decimal);
-
-                        if *elem == start_decimal {
-                          file_started = true;
-
-                          app_handle
-                            .emit_all("rs232-file-send", "Started reading")
-                            .unwrap();
-                        } else if *elem == stop_decimal && file_started {
-                          total_file_size += file_buf_size;
-                          file.write_all(&file_buf[..file_buf_size]).unwrap();
-                          app_handle
-                            .emit_all("rs232-file-progress", format!("{}", total_file_size))
-                            .unwrap();
-
-                          app_handle
-                            .emit_all("rs232-file-send", "Finished file")
-                            .unwrap();
-                          break 'main;
-                        } else if file_started && !forbidden_decimals.contains(&*elem) {
-                          // file has started so we can begin reader -> everything except when it contains forbidden numbers
-                          file_buf.insert(file_buf_size, *elem);
-                          file_buf_size += 1;
-                        }
-                      }
-
-                      // if we got something to write to the file -> write it
-                      if file_buf_size > 0 {
-                        total_file_size += file_buf_size;
-                        file.write_all(&file_buf[..file_buf_size]).unwrap();
-                        file_buf = Vec::new();
-                        file_buf_size = 0;
-
-                        app_handle
-                          .emit_all("rs232-file-progress", format!("{}", total_file_size))
-                          .unwrap();
-                      }
-                    }
-                    Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
-                    Err(_e) => {
-                      std::thread::sleep(Duration::from_millis(5));
-                      break 'reading;
-                    }
-                  }
-                }
-              }
-              Err(_e) => {
-                app_handle
-                  .emit_all("rs232-error", format!("Failed to open {}", port_name))
-                  .unwrap();
-                std::thread::sleep(Duration::from_millis(5));
-              }
-            }
-          }
-          START_THREAD.store(false, Ordering::Relaxed);
-          app_handle.emit_all("rs232-status", "stopped").unwrap();
-        });
-        return Ok("Waiting for file...".into());
-      }
-      Err(_e) => return Err("Error creating that file".into()),
-    };
-  } else {
-    return Err("Thread already started".into());
-  }
-}
-
-#[tauri::command]
-fn start_file_send(
-  file_path: String,
-  port_name: String,
-  baud_rate: u32,
-  data_bits_number: u32,
-  parity_string: u32,
-  stop_bits_number: u32,
-  send_in_pieces: u8,
-  max_char: usize,
-  delay: u64,
-  listen_cnc: u8,
-  stop_char: u8,
-  restart_char: u8,
-  app_handle: tauri::AppHandle,
-) -> Result<String, String> {
-  if file_path == "" {
-    return Err("Geen file path gespecificeerd".into());
-  }
-  if port_name == "" {
-    return Err("Geen port name gespecificeerd".into());
-  }
-
-  if baud_rate == 0 {
-    return Err("Geen baud rate gespecificeerd".into());
-  }
-
-  let data_bits;
-
-  match data_bits_number {
-    5 => data_bits = DataBits::Five,
-    6 => data_bits = DataBits::Six,
-    7 => data_bits = DataBits::Seven,
-    8 => data_bits = DataBits::Eight,
-    _ => return Err("Geen data bits gespecificeerd".into()),
-  }
-
-  let parity;
-
-  match parity_string {
-    0 => parity = Parity::None,
-    1 => parity = Parity::Odd,
-    2 => parity = Parity::Even,
-    _ => return Err("Geen data bits gespecificeerd".into()),
-  }
-
-  let stop_bits;
-
-  match stop_bits_number {
-    0 => stop_bits = StopBits::One,
-    1 => stop_bits = StopBits::Two,
-    _ => return Err("Geen data bits gespecificeerd".into()),
-  }
-
-  let file_path_copy = file_path.clone();
-
-  if !START_THREAD.load(Ordering::Relaxed) {
-    let f = File::open(file_path);
-    let mut total_bytes: usize = 0;
-    let mut interval_bytes: usize = 0;
-
-    match f {
-      Ok(mut file) => {
-        START_THREAD.store(true, Ordering::Relaxed);
-
-        std::thread::spawn(move || {
-          app_handle.emit_all("rs232-status", "started").unwrap();
-          app_handle
-            .emit_all("rs232-file-send", "Started transfer")
-            .unwrap();
-
-          'main: loop {
-            if !START_THREAD.load(Ordering::Relaxed) {
-              break 'main;
-            }
-
-            let port = serialport::new(port_name.clone(), baud_rate)
-              .data_bits(data_bits)
-              .stop_bits(stop_bits)
-              .parity(parity)
-              .timeout(Duration::from_millis(10))
-              .open();
-
-            match port {
-              Ok(mut port) => {
-                app_handle.emit_all("rs232-error", "").unwrap();
-                let mut file_buf: Vec<u8> = vec![0; 10];
-                let mut serial_buf: Vec<u8> = vec![0; 10];
-                let mut stop: bool = false;
-
-                'reading: loop {
-                  if !START_THREAD.load(Ordering::Relaxed) {
-                    break 'main;
-                  }
-
-                  if send_in_pieces == 1 && interval_bytes >= max_char {
-                    interval_bytes = 0;
-                    std::thread::sleep(Duration::from_millis(delay));
-                  }
-
-                  if !stop {
-                    match file.read(file_buf.as_mut_slice()) {
-                      Ok(t) => {
-                        if t == 0 {
-                          app_handle
-                            .emit_all("rs232-file-send", "Send completed")
-                            .unwrap();
-                          break 'main;
-                        } else {
-                          match port.write(&file_buf[..t]) {
-                            Ok(t) => {
-                              total_bytes += t;
-                              interval_bytes += t;
-                              app_handle
-                                .emit_all(
-                                  "rs232-file-progress",
-                                  format!("{} / {}", total_bytes, file.metadata().unwrap().len()),
-                                )
-                                .unwrap();
-                            }
-                            Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
-                            Err(_e) => {
-                              app_handle
-                                .emit_all("rs232-error", format!("Failed to open {}", port_name))
-                                .unwrap();
-                              break 'reading;
-                            }
-                          }
-                        }
-                      }
-                      Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
-                      Err(_e) => {
-                        app_handle
-                          .emit_all(
-                            "rs232-error",
-                            format!("Failed to read file {}", file_path_copy),
-                          )
-                          .unwrap();
-                        break 'main;
-                      }
-                    }
-                  }
-
-                  if listen_cnc == 1 {
-                    match port.read(serial_buf.as_mut_slice()) {
-                      Ok(t) => {
-                        for elem in &serial_buf[..t] {
-                          if *elem == stop_char {
-                            stop = true;
-                          } else if *elem == restart_char {
-                            stop = false;
-                          }
-                        }
-                      }
-                      Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
-                      Err(_e) => {
-                        std::thread::sleep(Duration::from_millis(5));
-                        break 'reading;
-                      }
-                    }
-                  }
-                }
-              }
-              Err(_e) => {
-                app_handle
-                  .emit_all("rs232-error", format!("Failed to open {}", port_name))
-                  .unwrap();
-                std::thread::sleep(Duration::from_millis(5));
-              }
-            }
-          }
-          START_THREAD.store(false, Ordering::Relaxed);
-          app_handle.emit_all("rs232-status", "stopped").unwrap();
-        });
-        return Ok("Starting file sending...".into());
-      }
-      Err(_e) => return Err("Error opening that file".into()),
-    };
-  } else {
-    return Err("Thread already started".into());
-  }
+  // Show main window
+  window.get_window("main").unwrap().show().unwrap();
 }
 
 #[tauri::command]
 fn get_all_availble_ports() -> Result<std::vec::Vec<String>, String> {
-  match available_ports() {
-    Ok(ports) => {
-      let mut elements = vec![];
-      let index = 0;
-      for p in ports {
-        elements.insert(index, p.port_name);
-      }
+    match available_ports() {
+        Ok(ports) => {
+            let mut elements = vec![];
+            let index = 0;
+            for p in ports {
+                elements.insert(index, p.port_name);
+            }
 
-      return Ok(elements);
+            return Ok(elements);
+        }
+        Err(_e) => return Err("Error listing serial ports".to_string()),
     }
-    Err(_e) => return Err("Error listing serial ports".to_string()),
-  }
+}
+
+async fn get_bearer_token(username: String, password: String) -> String {
+    let data = LoginData {
+        grant_type: "password".into(),
+        username: username.into(),
+        password: password.into(),
+    };
+    let data = serde_urlencoded::to_string(&data).expect("serialize issue");
+
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .build()
+        .unwrap();
+    let response = client
+        .post("https://app.esma.be:4430/Token")
+        .header("Accept", "*/*")
+        .header("X-Requested-With", "XMLHttpRequest")
+        .header("Referer", "https://app.esma.be:4430/")
+        .body(data)
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await;
+    match response {
+        Ok(res) => {
+            let value: Value = serde_json::from_str(&*res).unwrap();
+
+            // Check if the object has a specific key-value pair
+            if let Some(val) = value.get("access_token") {
+                if val.is_string() {
+                    return value["access_token"].as_str().unwrap().to_string();
+                } else {
+                    // The object has the key-value pair
+                    println!("Accestoken is empty");
+                    return "".into();
+                }
+            } else {
+                // The object doesn't have the key
+                println!("The object doesn't contain the key");
+                return "".into();
+            }
+        }
+        Err(err) => {
+            println!("err = {:?}", err);
+            return "".into();
+        }
+    }
+}
+
+#[tauri::command(async)]
+async fn get_debiteuren(
+    take: usize,
+    skip: usize,
+    _productie_order: String,
+    api_setttings: State<'_, ApiSettings>,
+    bearer_token: State<'_, BearerToken>,
+) -> Result<String, String> {
+    let mut token = bearer_token.0.clone();
+    if token.is_empty() {
+        let res = get_bearer_token(
+            api_setttings.username.clone(),
+            api_setttings.password.clone(),
+        )
+        .await;
+
+        if res.is_empty() {
+            return Err("Access denied".into());
+        }
+        token = res;
+    }
+
+    //token = "DECNSJGmLoW2iVgU9DQsY0rs0Hpr7fSplnROu0E3eR7phWa2cJHr3YbJBLmuwmX_2rhOvnEBSvDimroVy_rCf4SVfVHSwIdUjyUqizujHfDhBCmc1zuDnussQW7fjOs0I-OzoLkdEGL-Sr4_sh2O6zk9GW575lkxQlWwDFXWxDD7sqY-MBfyLWvD_Hdm3gb-M_m7tUEv94v-MJlbRvboFaRZSKtOzy3AY0qBXcYMyiGfaqrZmJKzeIrrrPKHSJCvU6qBkvUd-IUO4OpZh-urKoEU_D6qHug2eXPwqhIjPnhWHcKbPsTWMgimNYVHUPtOf1Tmi2eE7Glen9JHWQgLUwF2QcnCe919IbppCtRFneZirXiPgefkCeB7zaJfOBANoC2__YC2zrEO6pOMIkGOelkQzUS9ZQwtmqnsOZgJ3PcNU9ex3C80Ug1RWCaRIb4tYwzM_84XHT32JtXw1OZs-RN9LgTFVfgcP366zvmxr3xIxT4p-uyO_d4ZlehE_BuzJS-QyhyT1mjCwb4lS99wlIob_PO4y2IkxlW1igXD-WI".into();
+
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .build()
+        .unwrap();
+
+    let req = client
+        .get("https://app.esma.be:4430/api/Debiteur")
+        .header("Accept", "*/*")
+        .header("Authorization", format!("Bearer {}", token));
+
+    let response = req.send().await.unwrap();
+
+    let status = response.status();
+
+    // if response is 200 -> parse result
+    if status == 200 {
+        let response2 = response.text().await;
+        match response2 {
+            Ok(res) => {
+                // convert res into &str
+                let res_slice: &str = &res[..];
+
+                // parse result
+                let debiteuren: Vec<Debiteur> = serde_json::from_str(res_slice).unwrap();
+
+                // send only the items requested
+                return Ok(serde_json::to_string_pretty(&debiteuren[skip..(skip + take)]).unwrap());
+            }
+            Err(_err) => return Err("[]".into()),
+        }
+    } else if status == 401 {
+        // parse new token
+        let res = get_bearer_token(
+            api_setttings.username.clone(),
+            api_setttings.password.clone(),
+        )
+        .await;
+
+        if res.is_empty() {
+            return Err("Access denied".into());
+        }
+
+        let req = client
+            .get("https://app.esma.be:4430/api/Debiteur")
+            .header("Accept", "*/*")
+            .header("Authorization", format!("Bearer {}", res));
+
+        let response = req.send().await.unwrap();
+
+        let status = response.status();
+
+        if status == 200 {
+            let response2 = response.text().await;
+            match response2 {
+                Ok(res) => {
+                    // convert res into &str
+                    let res_slice: &str = &res[..];
+
+                    // parse result
+                    let debiteuren: Vec<Debiteur> = serde_json::from_str(res_slice).unwrap();
+
+                    // send only the items requested
+                    return Ok(
+                        serde_json::to_string_pretty(&debiteuren[skip..(skip + take)]).unwrap(),
+                    );
+                }
+                Err(_err) => return Err("[]".into()),
+            }
+        } else {
+            return Err("[]".into());
+        }
+    } else {
+        return Err("[]".into());
+    }
+}
+
+#[tauri::command]
+fn save_rs232_settings(
+    port_name: String,
+    baud_rate: u32,
+    data_bits_number: u32,
+    parity_string: u32,
+    stop_bits_number: u32,
+    exalise_settings: State<'_, ExaliseSettings>,
+) -> Result<String, String> {
+    if port_name == "" {
+        return Err("Geen port name gespecificeerd".into());
+    }
+
+    if baud_rate == 0 {
+        return Err("Geen baud rate gespecificeerd".into());
+    }
+
+    match data_bits_number {
+        5 => {}
+        6 => {}
+        7 => {}
+        8 => {}
+        _ => return Err("Geen data bits gespecificeerd".into()),
+    }
+
+    match parity_string {
+        0 => {}
+        1 => {}
+        2 => {}
+        _ => return Err("Geen data bits gespecificeerd".into()),
+    }
+
+    match stop_bits_number {
+        1 => {}
+        2 => {}
+        _ => return Err("Geen data bits gespecificeerd".into()),
+    }
+
+    let rs232_settings = RS232Settings {
+        port_name,
+        baud_rate,
+        data_bits_number,
+        parity_string,
+        stop_bits_number,
+    };
+
+    let exalise_settings = ExaliseSettings {
+        mqtt_settings: ExaliseMqttSettings {
+            mqtt_key: exalise_settings.mqtt_settings.mqtt_key.clone(),
+            mqtt_secret: exalise_settings.mqtt_settings.mqtt_secret.clone(),
+            device_key: exalise_settings.mqtt_settings.device_key.clone(),
+        },
+        http_settings: ExaliseHttpSettings {
+            http_key: exalise_settings.http_settings.http_key.clone(),
+            http_secret: exalise_settings.http_settings.http_secret.clone(),
+        },
+        rs232_settings,
+    };
+
+    // Save the JSON structure into the other file.
+    let res = std::fs::write(
+        "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/settings.exalise.json",
+        serde_json::to_string_pretty(&exalise_settings).unwrap(),
+    );
+
+    match res {
+        Ok(_v) => return Ok("Saved".into()),
+        Err(e) => {
+            println!("{:?}", e);
+            return Ok("Error".into());
+        }
+    }
+}
+
+#[tauri::command]
+fn save_exalise_mqtt_settings(
+    mqtt_key: String,
+    mqtt_secret: String,
+    device_key: String,
+    exalise_settings: State<'_, ExaliseSettings>,
+) -> Result<String, String> {
+    let mqtt_settings = ExaliseMqttSettings {
+        mqtt_key,
+        mqtt_secret,
+        device_key,
+    };
+
+    let exalise_settings = ExaliseSettings {
+        mqtt_settings,
+        http_settings: ExaliseHttpSettings {
+            http_key: exalise_settings.http_settings.http_key.clone(),
+            http_secret: exalise_settings.http_settings.http_secret.clone(),
+        },
+        rs232_settings: RS232Settings {
+            port_name: exalise_settings.rs232_settings.port_name.clone(),
+            baud_rate: exalise_settings.rs232_settings.baud_rate.clone(),
+            data_bits_number: exalise_settings.rs232_settings.data_bits_number.clone(),
+            parity_string: exalise_settings.rs232_settings.parity_string.clone(),
+            stop_bits_number: exalise_settings.rs232_settings.stop_bits_number.clone(),
+        },
+    };
+
+    // Save the JSON structure into the other file.
+    let res = std::fs::write(
+        "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/settings.exalise.json",
+        serde_json::to_string_pretty(&exalise_settings).unwrap(),
+    );
+
+    match res {
+        Ok(_v) => return Ok("Saved".into()),
+        Err(e) => {
+            println!("{:?}", e);
+            return Ok("Error".into());
+        }
+    }
+}
+
+#[tauri::command]
+fn save_api_settings(username: String, password: String) -> Result<String, String> {
+    let api_settings: ApiSettings = ApiSettings {
+        username: username.clone(),
+        password: password.clone(),
+    };
+
+    // Save the JSON structure into the other file.
+    let res = std::fs::write(
+        "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/api.settings.json",
+        serde_json::to_string_pretty(&api_settings).unwrap(),
+    );
+
+    match res {
+        Ok(_v) => return Ok("Saved".into()),
+        Err(e) => {
+            println!("{:?}", e);
+            return Ok("Error".into());
+        }
+    }
+}
+
+#[tauri::command]
+fn save_exalise_http_settings(
+    http_key: String,
+    http_secret: String,
+    exalise_settings: State<'_, ExaliseSettings>,
+) -> Result<String, String> {
+    let http_settings = ExaliseHttpSettings {
+        http_key,
+        http_secret,
+    };
+
+    let exalise_settings = ExaliseSettings {
+        mqtt_settings: ExaliseMqttSettings {
+            mqtt_key: exalise_settings.mqtt_settings.mqtt_key.clone(),
+            mqtt_secret: exalise_settings.mqtt_settings.mqtt_secret.clone(),
+            device_key: exalise_settings.mqtt_settings.device_key.clone(),
+        },
+        http_settings,
+        rs232_settings: RS232Settings {
+            port_name: exalise_settings.rs232_settings.port_name.clone(),
+            baud_rate: exalise_settings.rs232_settings.baud_rate.clone(),
+            data_bits_number: exalise_settings.rs232_settings.data_bits_number.clone(),
+            parity_string: exalise_settings.rs232_settings.parity_string.clone(),
+            stop_bits_number: exalise_settings.rs232_settings.stop_bits_number.clone(),
+        },
+    };
+
+    // Save the JSON structure into the other file.
+    let res = std::fs::write(
+        "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/settings.exalise.json",
+        serde_json::to_string_pretty(&exalise_settings).unwrap(),
+    );
+
+    match res {
+        Ok(_v) => return Ok("Saved".into()),
+        Err(e) => {
+            println!("{:?}", e);
+            return Ok("Error".into());
+        }
+    }
+}
+
+#[tauri::command(async)]
+async fn save_alerts(alert_items: Vec<Alert>) -> Result<String, String> {
+    let alerts = Alerts {
+        alerts: alert_items,
+    };
+
+    // Save the JSON structure into the other file.
+    let res = std::fs::write(
+        "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/alerts.exalise.json",
+        serde_json::to_string_pretty(&alerts).unwrap(),
+    );
+
+    match res {
+        Ok(_v) => {
+            return Ok("Saved".into());
+        }
+        Err(e) => {
+            println!("{:?}", e);
+            return Ok("Error".into());
+        }
+    }
+}
+
+#[tauri::command]
+fn get_alerts() -> Result<String, String> {
+    let res = std::fs::read_to_string(
+        &"C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/alerts.exalise.json",
+    );
+
+    match res {
+        Ok(v) => return Ok(v),
+        Err(e) => {
+            println!("{:?}", e);
+            return Ok("Error".into());
+        }
+    }
+}
+
+#[tauri::command]
+fn get_exalise_settings() -> Result<String, String> {
+    let res = std::fs::read_to_string(
+        &"C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/settings.exalise.json",
+    );
+
+    match res {
+        Ok(v) => return Ok(v),
+        Err(e) => {
+            println!("{:?}", e);
+            return Ok("Error".into());
+        }
+    }
+}
+
+#[tauri::command]
+fn get_api_settings() -> Result<String, String> {
+    let res = std::fs::read_to_string(
+        &"C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/api.settings.json",
+    );
+
+    match res {
+        Ok(v) => return Ok(v),
+        Err(e) => {
+            println!("{:?}", e);
+            return Ok("Error".into());
+        }
+    }
+}
+
+#[tauri::command(async)]
+async fn get_dashboard(_exalise_settings: State<'_, ExaliseSettings>) -> Result<String, String> {
+    let res = std::fs::read_to_string(
+        &"C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
+    );
+
+    match res {
+        Ok(v) => {
+            return Ok(v);
+        }
+        Err(e) => {
+            println!("{:?}", e);
+            return Ok("Error".into());
+        }
+    }
+}
+
+
+#[tauri::command(async)]
+async fn save_device_to_dashboard(device: Device) -> Result<Dashboard, String> {
+    let _device_key = device.key.clone();
+
+    let mut dashboard: Dashboard;
+
+    let res = std::fs::read_to_string(
+        &"C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
+    );
+
+    match res {
+        Ok(v) => {
+            let ress = serde_json::from_str::<Dashboard>(&v);
+            match ress {
+                Ok(r) => {
+                    dashboard = r;
+                }
+                Err(_err) => {
+                    return Err("Error".into());
+                }
+            }
+        }
+        Err(_e) => {
+            return Err("Error".into());
+        }
+    }
+
+    let device_id = device.id.clone();
+
+    let layout: Layout = Layout {
+        i: device_id,
+        x: 0,
+        y: 0,
+        w: 1,
+        h: 1,
+    };
+
+    dashboard.devices.push(device);
+    dashboard.layout.push(layout);
+
+    std::fs::write(
+        "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
+        serde_json::to_string_pretty(&dashboard).unwrap(),
+    )
+    .unwrap();
+
+    return Ok(dashboard);
+}
+
+#[tauri::command(async)]
+async fn save_widget_to_dashboard(dashboard: Dashboard) -> Result<Dashboard, String> {
+    std::fs::write(
+        "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
+        serde_json::to_string_pretty(&dashboard).unwrap(),
+    )
+    .unwrap();
+
+    return Ok(dashboard);
+}
+
+#[tauri::command]
+fn get_exalise_connection() -> bool {
+    if !CONNECTED_TO_EXALISE.load(Ordering::Relaxed) {
+        return false;
+    } else {
+        return true;
+    }
+}
+
+#[tauri::command(async)]
+async fn get_devices(exalise_settings: State<'_, ExaliseSettings>) -> Result<String, String> {
+    let device_key = exalise_settings.mqtt_settings.device_key.clone();
+    let http_key = exalise_settings.http_settings.http_key.clone();
+    let http_secret = exalise_settings.http_settings.http_secret.clone();
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get("https://api.exalise.com/api/getalldevices")
+        .header("x-api-key", http_key)
+        .header("x-api-secret", http_secret)
+        .header("x-master-device-key", device_key)
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await;
+
+    match response {
+        Ok(res) => return Ok(res.into()),
+        Err(_err) => return Err("[]".into()),
+    }
+}
+
+#[tauri::command(async)]
+async fn get_device(
+    device_id: String,
+
+    exalise_settings: State<'_, ExaliseSettings>,
+) -> Result<String, bool> {
+    let device_key = exalise_settings.mqtt_settings.device_key.clone();
+    let http_key = exalise_settings.http_settings.http_key.clone();
+    let http_secret = exalise_settings.http_settings.http_secret.clone();
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!(
+            "https://api.exalise.com/api/getdevice/{}",
+            device_id
+        ))
+        .header("x-api-key", http_key)
+        .header("x-api-secret", http_secret)
+        .header("x-master-device-key", device_key)
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await;
+
+    match response {
+        Ok(res) => return Ok(res.into()),
+        Err(_err) => return Err(false),
+    }
+}
+
+#[tauri::command(async)]
+async fn get_last_value(
+    device_id: String,
+    datapoint_key: String,
+    exalise_settings: State<'_, ExaliseSettings>,
+) -> Result<String, String> {
+    let device_key = exalise_settings.mqtt_settings.device_key.clone();
+    let http_key = exalise_settings.http_settings.http_key.clone();
+    let http_secret = exalise_settings.http_settings.http_secret.clone();
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!(
+            "https://api.exalise.com/api/getvalue/{}/{}",
+            device_id, datapoint_key
+        ))
+        .header("x-api-key", http_key)
+        .header("x-api-secret", http_secret)
+        .header("x-master-device-key", device_key)
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await;
+
+    match response {
+        Ok(res) => {
+            //println!("{}", res);
+            return Ok(res.into());
+        }
+        Err(err) => {
+            println!("{}", err);
+            return Err("".into());
+        }
+    }
+}
+
+#[tauri::command(async)]
+async fn save_dashboard_layout(dashboard: Dashboard) -> Result<String, String> {
+    std::fs::write(
+        "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
+        serde_json::to_string_pretty(&dashboard).unwrap(),
+    )
+    .unwrap();
+
+    return Ok("saved".into());
+}
+
+#[tauri::command()]
+fn get_pdf_file() -> Result<String, String> {
+    return Ok("Ok".into());
 }

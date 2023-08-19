@@ -7,13 +7,26 @@
     "distDir": "../build"
   },
   "package": {
-    "productName": "Exalise RS232 monitoring software",
+    "productName": "Exalise production monitoring software",
     "version": "0.1.0"
   },
   "tauri": {
     "allowlist": {
-      "all": true
+      "all": true,
+      "fs": {
+        "all": true,
+        "scope": ["*"]
+      },
+      "path": {
+        "all": true
+      },
+      "protocol": {
+        "all": true,
+        "asset": true,
+        "assetScope": ["**"]
+      }
     },
+
     "bundle": {
       "active": true,
       "category": "DeveloperTool",
@@ -29,15 +42,8 @@
         "icons/icon.icns",
         "icons/icon.ico"
       ],
-      "identifier": "com.exalise.rs232-monitoring-software",
-      "longDescription": "RS232 software writen by exalise to monitor cnc machines and transfer files between them",
-      "macOS": {
-        "entitlements": null,
-        "exceptionDomain": "",
-        "frameworks": [],
-        "providerShortName": null,
-        "signingIdentity": null
-      },
+      "identifier": "com.exalise.production-monitoring-software",
+      "longDescription": "Software writen by exalise to monitor the overal production, cnc machines and transfer files between them",
       "resources": [],
       "shortDescription": "",
       "targets": "all",
@@ -46,23 +52,34 @@
         "digestAlgorithm": "sha256",
         "timestampUrl": "",
         "wix": {
-          "language": ["en-US", "nl-NL"]
+          "language": ["nl-NL"]
+        },
+        "webviewInstallMode": {
+          "type": "offlineInstaller"
         }
       }
     },
     "security": {
       "csp": null
     },
+
     "updater": {
       "active": false
     },
     "windows": [
       {
-        "fullscreen": false,
-        "height": 1024,
+        "label": "main",
+        "fullscreen": true,
         "resizable": true,
-        "title": "Exalise RS232 monitoring software",
-        "width": 1280
+        "title": "Exalise production monitoring software",
+        "width": 1920
+      },
+      {
+        "label": "splashscreen",
+        "fullscreen": true,
+        "decorations": false,
+        "resizable": false,
+        "url": "splashscreen.html"
       }
     ]
   }

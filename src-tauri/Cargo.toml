@@ -1,36 +1,33 @@
 [package]
-name = "app"
-version = "0.1.0"
+name = "cnc-desktopapp"
+version = "0.0.0"
 description = "A Tauri App"
 authors = ["you"]
 license = ""
 repository = ""
-default-run = "app"
 edition = "2021"
 rust-version = "1.57"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [build-dependencies]
-tauri-build = { version = "1.0.0-rc.9", features = [] }
+tauri-build = { version = "1.2", features = [] }
 
 [dependencies]
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-tauri = { version = "1.0.0-rc.11", features = ["api-all"] }
-serialport = "4.1.0"
-clap = "3.1.18"
-rumqttc = "0.12.0"
-json-decode = "0.6.0"
+tauri = { version = "1.2", features = ["api-all"] }
+tauri-plugin-store = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "dev" }
+serialport = "4.2.0"
+rumqttc = "0.20.0"
 tokio = "1.18.2"
-
-[dependencies.tauri-plugin-store]
-git = "https://github.com/tauri-apps/tauri-plugin-store"
+reqwest = { version = "0.11", features = ["json"] }
+serde_urlencoded = "0.7.1"
 
 [features]
 # by default Tauri runs in production mode
 # when `tauri dev` runs it is executed with `cargo run --no-default-features` if `devPath` is an URL
-default = [ "custom-protocol" ]
+default = ["custom-protocol"]
 # this feature is used used for production builds where `devPath` points to the filesystem
 # DO NOT remove this
-custom-protocol = [ "tauri/custom-protocol" ]
+custom-protocol = ["tauri/custom-protocol"]

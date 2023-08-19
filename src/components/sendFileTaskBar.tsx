@@ -164,7 +164,9 @@ const SendFileTaskBar: React.FC<SendFileTaskBarProps> = ({
         )
       ) : (
         <Flex
-          width={["60px", "70px", "80px"]}
+          width={"fit-content"}
+          pl={2}
+          pr={2}
           alignItems="center"
           justifyContent={"center"}
           backgroundColor="red.500"
@@ -174,11 +176,9 @@ const SendFileTaskBar: React.FC<SendFileTaskBarProps> = ({
           fontWeight="semibold"
           ml={[1, 2, 3]}
         >
-          <Spacer />
           <Icon as={MdError} />
-          <Spacer />
-          <Text>Error</Text>
-          <Spacer />
+          <Text ml="1">Error:</Text>
+          <Text ml="2">{error}</Text>
         </Flex>
       )}
       <LightMode>
@@ -188,7 +188,7 @@ const SendFileTaskBar: React.FC<SendFileTaskBarProps> = ({
           size={buttonSize}
           colorScheme="red"
           onClick={() => {
-            invoke("stop_rs232", {})
+            invoke("stop_file_send", {})
               .then((_e) => setFileSend(false))
               .catch((e) => {
                 console.log(e);

@@ -11,7 +11,7 @@ import {
   useBreakpointValue,
 } from "@chakra-ui/react";
 import { invoke } from "@tauri-apps/api";
-import React from "react";
+import React, { useState } from "react";
 import { AiFillCheckCircle } from "react-icons/ai";
 import { BsFileEarmarkBreak } from "react-icons/bs";
 import { MdError } from "react-icons/md";
@@ -21,6 +21,7 @@ interface ReceiveFileTaskbarProps {
   fileSendStatus: string;
   fileSendProgress: string;
   setFileReceive: React.Dispatch<React.SetStateAction<boolean>>;
+  fileReceivePath: string;
 }
 
 const ReceiveFileTaskbar: React.FC<ReceiveFileTaskbarProps> = ({
@@ -28,7 +29,9 @@ const ReceiveFileTaskbar: React.FC<ReceiveFileTaskbarProps> = ({
   fileSendProgress,
   fileSendStatus,
   setFileReceive,
+  fileReceivePath,
 }) => {
+  const [loading, setLoading] = useState(false);
   const buttonSize = useBreakpointValue(["xs", "xs", "sm"]);
 
   return (
@@ -165,7 +168,9 @@ const ReceiveFileTaskbar: React.FC<ReceiveFileTaskbarProps> = ({
         )
       ) : (
         <Flex
-          width={["60px", "70px", "80px"]}
+          width={"fit-content"}
+          pl={2}
+          pr={2}
           alignItems="center"
           justifyContent={"center"}
           backgroundColor="red.500"
@@ -175,11 +180,9 @@ const ReceiveFileTaskbar: React.FC<ReceiveFileTaskbarProps> = ({
           fontWeight="semibold"
           ml={[1, 2, 3]}
         >
-          <Spacer />
           <Icon as={MdError} />
-          <Spacer />
-          <Text>Error</Text>
-          <Spacer />
+          <Text ml="1">Error:</Text>
+          <Text ml="2">{error}</Text>
         </Flex>
       )}
       <LightMode>
@@ -188,9 +191,20 @@ const ReceiveFileTaskbar: React.FC<ReceiveFileTaskbarProps> = ({
           mr={"3"}
           size={buttonSize}
           colorScheme="red"
-          onClick={() => {
-            invoke("stop_rs232", {})
-              .then((_e) => setFileReceive(false))
+          onClick={async () => {
+            if (fileSendStatus === "Finished file") {
+              setFileReceive(false);
+              return;
+            }
+
+            setLoading(true);
+            invoke("stop_file_receive", {
+              filePath: fileReceivePath,
+            })
+              .then((_e) => {
+                setFileReceive(false);
+                setLoading(false);
+              })
               .catch((e) => {
                 console.log(e);
               });
