@@ -12,7 +12,8 @@ import TaskBar from "./pages/TaskBar";
 import { invoke } from "@tauri-apps/api";
 import styles from "./styles.module.css";
 import useWindowSize from "./utils/useWindowSize";
-import { listen } from "@tauri-apps/api/event";
+
+import { onUpdaterEvent } from "@tauri-apps/api/updater";
 
 function App() {
   const [page, setPage] = useState(0);
@@ -29,17 +30,11 @@ function App() {
   useEffect(() => {
     invoke("close_splashscreen");
 
-    listen("update-status", (event) => {
-      // event.event is the event name (useful if you want to use a single callback fn for multiple event types)
-      // event.payload is the payload object
-      setError(event.payload as string);
-    })
-      .then(() => {
-        setError("Done listing");
-      })
-      .catch((err) => {
-        setError("Error listing: " + err);
+    onUpdaterEvent(({ error, status }) => {
+      invoke("write_to_log_file", {
+        data: `${status + " / " + error} \r\n`,
       });
+    });
   }, []);
 
   return (
@@ -82,7 +77,7 @@ function App() {
             ]}
           />
         </div>
-        {error !== "" ? ( // && page === 1
+        {error !== "" && page === 1 ? (
           <Flex
             width={"100%"}
             height={`70px`}

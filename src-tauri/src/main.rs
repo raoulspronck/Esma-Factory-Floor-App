@@ -19,12 +19,14 @@ use rumqttc::{AsyncClient, Event, LastWill, MqttOptions, Packet, QoS};
 use serde_json::Value;
 use serde_urlencoded;
 use serialport::available_ports;
+use std::fs::OpenOptions;
 use std::str;
 use std::sync::atomic::Ordering;
 use tauri::Manager;
 use tauri::State;
 use tokio::sync::Mutex;
 use tokio::time::Duration;
+use std::io::Write;
 
 pub struct MqttClient(Mutex<AsyncClient>);
 
@@ -300,7 +302,7 @@ async fn main() {
 
                     match notification {
                         Ok(s) => {
-                            println!("{:?}", s);
+                            //println!("{:?}", s);
                             if !connected {
                                 CONNECTED_TO_EXALISE.store(true, Ordering::Relaxed);
 
@@ -359,13 +361,7 @@ async fn main() {
                                 }
                             }
                         }
-                        Err(e) => {
-                            std::fs::write(
-                                "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/logs.txt",
-                                format!("{:?}", e),
-                            )
-                            .unwrap();
-
+                        Err(_e) => {
                             if connected {
                                 CONNECTED_TO_EXALISE.store(false, Ordering::Relaxed);
                                 main_window
@@ -414,7 +410,8 @@ async fn main() {
             get_debiteuren,
             save_api_settings,
             get_api_settings,
-            close_splashscreen
+            close_splashscreen,
+            write_to_log_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -479,17 +476,17 @@ async fn get_bearer_token(username: String, password: String) -> String {
                     return value["access_token"].as_str().unwrap().to_string();
                 } else {
                     // The object has the key-value pair
-                    println!("Accestoken is empty");
+                    //println!("Accestoken is empty");
                     return "".into();
                 }
             } else {
                 // The object doesn't have the key
-                println!("The object doesn't contain the key");
+                //println!("The object doesn't contain the key");
                 return "".into();
             }
         }
-        Err(err) => {
-            println!("err = {:?}", err);
+        Err(_err) => {
+            //println!("err = {:?}", err);
             return "".into();
         }
     }
@@ -662,8 +659,8 @@ fn save_rs232_settings(
 
     match res {
         Ok(_v) => return Ok("Saved".into()),
-        Err(e) => {
-            println!("{:?}", e);
+        Err(_e) => {
+            //println!("{:?}", e);
             return Ok("Error".into());
         }
     }
@@ -705,8 +702,8 @@ fn save_exalise_mqtt_settings(
 
     match res {
         Ok(_v) => return Ok("Saved".into()),
-        Err(e) => {
-            println!("{:?}", e);
+        Err(_e) => {
+            //println!("{:?}", e);
             return Ok("Error".into());
         }
     }
@@ -727,8 +724,8 @@ fn save_api_settings(username: String, password: String) -> Result<String, Strin
 
     match res {
         Ok(_v) => return Ok("Saved".into()),
-        Err(e) => {
-            println!("{:?}", e);
+        Err(_e) => {
+            //println!("{:?}", e);
             return Ok("Error".into());
         }
     }
@@ -769,8 +766,8 @@ fn save_exalise_http_settings(
 
     match res {
         Ok(_v) => return Ok("Saved".into()),
-        Err(e) => {
-            println!("{:?}", e);
+        Err(_e) => {
+            //println!("{:?}", e);
             return Ok("Error".into());
         }
     }
@@ -792,8 +789,8 @@ async fn save_alerts(alert_items: Vec<Alert>) -> Result<String, String> {
         Ok(_v) => {
             return Ok("Saved".into());
         }
-        Err(e) => {
-            println!("{:?}", e);
+        Err(_e) => {
+            //println!("{:?}", e);
             return Ok("Error".into());
         }
     }
@@ -807,8 +804,8 @@ fn get_alerts() -> Result<String, String> {
 
     match res {
         Ok(v) => return Ok(v),
-        Err(e) => {
-            println!("{:?}", e);
+        Err(_e) => {
+            //println!("{:?}", e);
             return Ok("Error".into());
         }
     }
@@ -822,8 +819,8 @@ fn get_exalise_settings() -> Result<String, String> {
 
     match res {
         Ok(v) => return Ok(v),
-        Err(e) => {
-            println!("{:?}", e);
+        Err(_e) => {
+            //println!("{:?}", e);
             return Ok("Error".into());
         }
     }
@@ -837,8 +834,8 @@ fn get_api_settings() -> Result<String, String> {
 
     match res {
         Ok(v) => return Ok(v),
-        Err(e) => {
-            println!("{:?}", e);
+        Err(_e) => {
+            //println!("{:?}", e);
             return Ok("Error".into());
         }
     }
@@ -854,8 +851,8 @@ async fn get_dashboard(_exalise_settings: State<'_, ExaliseSettings>) -> Result<
         Ok(v) => {
             return Ok(v);
         }
-        Err(e) => {
-            println!("{:?}", e);
+        Err(_e) => {
+            //println!("{:?}", e);
             return Ok("Error".into());
         }
     }
@@ -1013,11 +1010,11 @@ async fn get_last_value(
 
     match response {
         Ok(res) => {
-            //println!("{}", res);
+            ////println!("{}", res);
             return Ok(res.into());
         }
-        Err(err) => {
-            println!("{}", err);
+        Err(_err) => {
+            //println!("{}", err);
             return Err("".into());
         }
     }
@@ -1038,3 +1035,58 @@ async fn save_dashboard_layout(dashboard: Dashboard) -> Result<String, String> {
 fn get_pdf_file() -> Result<String, String> {
     return Ok("Ok".into());
 }
+
+#[tauri::command()]
+fn write_to_log_file(data: String) -> bool {
+    let file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/logs.txt");
+    
+    match file {
+        Ok(mut f) => {
+            match f.write_all(data.as_bytes()) {
+                Ok(_ok) => {
+                    return true
+                }
+                Err(_err) => {
+                    return false
+                }
+            }
+        }
+        Err(_e) => {
+            return false
+        }
+    }
+}
+
+/* 
+Test updater
+
+.setup(|app| {
+    let handle = app.handle();
+    tauri::async_runtime::spawn(async move {
+      match handle
+        .updater()
+        .header("your-header", "value")
+        .unwrap()
+        .check()
+        .await
+      {
+        Ok(update) => {
+            match update.download_and_install().await{
+            Ok(_t) => {
+                //println!("Updated succesfully");
+            }
+            Err(e) => {
+                //println!("ERROR: {}", e);
+            }  
+         }                
+        }
+        Err(e) => {
+          //println!("ERROR: {}", e);
+        }
+      }
+    });
+    Ok(())
+  }) */
