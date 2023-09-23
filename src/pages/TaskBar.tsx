@@ -47,8 +47,10 @@ import ExaliseSettingModal from "../components/SettingsMenu/exaliseSettingModal"
 import SerialPortSettingModal from "../components/SettingsMenu/serialPortSettingModal";
 import AddDeviceModal from "../components/ViewMenu/addDeviceModal";
 import ManageAlertsModal from "../components/ViewMenu/manageAlertsModal";
-import { relaunch, exit } from "@tauri-apps/api/process";
+import { exit } from "@tauri-apps/api/process"; //relaunch
 import { VscChromeClose, VscDebugRestart } from "react-icons/vsc";
+import { BsCheckCircle, BsFillCheckCircleFill } from "react-icons/bs";
+import { FiAlertCircle } from "react-icons/fi";
 
 interface TaskBarProps {
   login: boolean;
@@ -83,9 +85,23 @@ const TaskBar: React.FC<TaskBarProps> = ({
   page,
   dashboard,
 }) => {
+  // Dialog it self
   const { isOpen, onOpen, onClose } = useDisclosure();
   const cancelRef = useRef();
+
+  // Timer
   const [closingTimer, setClosingTimer] = useState(10);
+  const timingIntervalLive = useRef(null);
+
+  // All the allerts it wants to subscribes
+  const [alerts, setAlerts] = useState([]);
+
+  // All the allerts it is subscribed to
+  const [subscribedAlerts, setSubscribedAlerts] = useState([]);
+
+  // All the active allerts
+  const activeAlerts = useRef([]);
+  const [displayActiveAlerts, setDisplayActiveAlerts] = useState([]);
 
   const {
     isOpen: isOpenLogin,
@@ -166,13 +182,13 @@ const TaskBar: React.FC<TaskBarProps> = ({
   const [apiUsername, setApiUsername] = useState("");
   const [apiPassword, setApiPassword] = useState("");
 
-  const [alerts, setAlerts] = useState([]);
-
   const [fileSendStatus, setFileSendStatus] = useState("");
   const [fileSendProgress, setFileProgress] = useState("");
   const [fileReceivePath, setFileReceivePath] = useState("");
 
   const [errorInput, setErrorInput] = useState("");
+
+  const [pingTime, setPingTime] = useState(0);
 
   const functionCalled = useRef(false);
   const functionCalledApi = useRef(false);
@@ -227,6 +243,8 @@ const TaskBar: React.FC<TaskBarProps> = ({
   };
 
   useEffect(() => {
+    let interval;
+
     if (!functionCalled.current) {
       functionCalled.current = true;
 
@@ -249,6 +267,15 @@ const TaskBar: React.FC<TaskBarProps> = ({
       listen("rs232-error-file", (event) => {
         setErrorInput(event.payload as string);
       });
+
+      listen("Ping", (event) => {
+        setPingTime(0);
+      });
+
+      setPingTime(0);
+      interval = setInterval(() => {
+        setPingTime((e) => e - 1);
+      }, 1000);
     }
   }, []);
 
@@ -303,31 +330,71 @@ const TaskBar: React.FC<TaskBarProps> = ({
     }
   }, []);
 
-  const [alertsListenTo, setAlertsListenTo] = useState([]);
-  const [alert, setAlert] = useState("");
-
   useEffect(() => {
+    // alerts have changed
     for (let i = 0; i < alerts.length; i++) {
-      let alert = `notification-${alerts[i].device_key}-${alerts[i].data_point}`;
-      if (!alertsListenTo.includes(alert)) {
-        listen(alert, (event) => {
-          setAlert(event.payload as string);
-          onOpen();
+      // key to subscribe to
+      let alert_key = `notification---${alerts[i].device_key}---${alerts[i].data_point}`;
 
-          const closing = setInterval(() => {
-            setClosingTimer((e) => e - 1);
-          }, 1000);
+      // subscribe to all the allerts it is already subscribed to
+      if (!subscribedAlerts.includes(alert)) {
+        listen(alert_key, (event) => {
+          // what happens if alert comes in
+          let message = event.payload as string;
 
-          setTimeout(() => {
-            clearInterval(closing);
+          // if it includes alert accepted
+          if (message.includes("/ alert accepted")) {
+            // 2 things or the alert shown is accepted or an other alert is accepted then disregard
+            let message_without_aceptance = message.replace(
+              "/ alert accepted",
+              ""
+            );
+
+            // check if it was included and if so remove it
+            var index = activeAlerts.current.indexOf(
+              alert_key + "/" + message_without_aceptance
+            );
+            if (index !== -1) {
+              var tempArray = activeAlerts.current;
+              tempArray.splice(index, 1);
+
+              activeAlerts.current = [...tempArray];
+              setDisplayActiveAlerts([...tempArray]);
+            }
+          } else {
+            let notification_key = alert_key + "/" + message;
+            // If message not yet active, add it
+            if (!activeAlerts.current.includes(notification_key)) {
+              var tempArray = [notification_key, ...activeAlerts.current];
+              activeAlerts.current = tempArray;
+              setDisplayActiveAlerts(tempArray);
+            }
+          }
+
+          if (activeAlerts.current.length > 0) {
+            onOpen();
+          } else {
             onClose();
-            setClosingTimer(10);
-          }, 10000);
+          }
         });
-        setAlertsListenTo((e) => [alert, ...e]);
+        setSubscribedAlerts((e) => [alert, ...e]);
       }
     }
   }, [alerts]);
+
+  const acceptNotification = (notification: string) => {
+    let notification_split = notification.split("/");
+    let message = notification_split[1] + "/ alert accepted";
+
+    // send alert accepted
+    invoke("send_message", {
+      deviceKey: notification_split[0].split("---")[1],
+      datapoint: notification_split[0].split("---")[2],
+      value: message,
+    })
+      .then((e) => console.log(e))
+      .catch((e) => console.log(e));
+  };
 
   return (
     <>
@@ -618,9 +685,23 @@ const TaskBar: React.FC<TaskBarProps> = ({
           </>
         )}
 
+        {displayActiveAlerts.length > 0 ? (
+          <IconButton
+            ml="2"
+            colorScheme={"orange"}
+            aria-label={"restart app"}
+            icon={<FiAlertCircle />}
+            mr={2}
+            onClick={onOpen}
+            size={"md"}
+            fontSize={"25px"}
+          />
+        ) : null}
+
         <Flex
           alignItems={"center"}
-          ml="auto"
+          ml={"auto"}
+          //ml={displayActiveAlerts.length > 0 ? null : "auto"}
           width={"fit-content"}
           mr={5}
           color="white"
@@ -658,7 +739,7 @@ const TaskBar: React.FC<TaskBarProps> = ({
             </Flex>
           ) : (
             <Flex
-              width={["110px", "130px", "140px"]}
+              width={["110px", "130px", "150px"]}
               alignItems="center"
               justifyContent={"center"}
               backgroundColor="green.500"
@@ -668,16 +749,17 @@ const TaskBar: React.FC<TaskBarProps> = ({
               fontWeight="semibold"
               ml={[1, 2, 3]}
             >
-              <Spacer />
-              <Icon as={MdWifiTethering} />
-              <Spacer />
-              <Text>connected</Text>
-              <Spacer />
+              <Icon ml={3} as={MdWifiTethering} />
+              <Text ml={2}>connected</Text>
+              <Text ml="auto" mr={2}>
+                {" "}
+                {pingTime}s
+              </Text>
             </Flex>
           )}
         </Flex>
 
-        <IconButton
+        {/* <IconButton
           colorScheme={"whiteAlpha"}
           aria-label={"restart app"}
           icon={<VscDebugRestart />}
@@ -685,7 +767,7 @@ const TaskBar: React.FC<TaskBarProps> = ({
           onClick={async () => {
             await relaunch();
           }}
-        />
+        /> */}
 
         <IconButton
           colorScheme={"red"}
@@ -719,6 +801,7 @@ const TaskBar: React.FC<TaskBarProps> = ({
         isOpen={isOpen}
         leastDestructiveRef={cancelRef}
         onClose={onClose}
+        closeOnOverlayClick={false}
       >
         <AlertDialogOverlay>
           <AlertDialogContent>
@@ -737,13 +820,40 @@ const TaskBar: React.FC<TaskBarProps> = ({
               bgColor="orange.400"
               color="white"
             >
-              {alert}
+              {displayActiveAlerts.map((a, key) => {
+                let alert = a.split("/");
+
+                return (
+                  <Flex
+                    key={key}
+                    alignItems={"center"}
+                    borderBottom={"2px"}
+                    borderTop={"2px"}
+                    paddingTop={"5px"}
+                    paddingBottom={"5px"}
+                    marginTop={"-2px"}
+                  >
+                    <Text marginRight={"20px"}>{alert[1]}</Text>
+
+                    <IconButton
+                      colorScheme="green"
+                      fontSize={"50px"}
+                      height={"70px"}
+                      width={"70px"}
+                      minW={"70px"}
+                      onClick={() => acceptNotification(a)}
+                      marginLeft={"auto"}
+                      icon={<BsCheckCircle />}
+                      aria-label={"Accept notification"}
+                    />
+                  </Flex>
+                );
+              })}
             </AlertDialogBody>
 
             <AlertDialogFooter>
-              <Text mr="auto">Automatisch sluiten in {closingTimer}s</Text>
-              <Button ref={cancelRef} onClick={onClose}>
-                Oke
+              <Button colorScheme="gray" onClick={onClose}>
+                Sluit
               </Button>
             </AlertDialogFooter>
           </AlertDialogContent>

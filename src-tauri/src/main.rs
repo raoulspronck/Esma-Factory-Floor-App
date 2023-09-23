@@ -15,18 +15,18 @@ use crate::rs232::{
     CONNECTED_TO_EXALISE,
 };
 
-use rumqttc::{AsyncClient, Event, LastWill, MqttOptions, Packet, QoS};
+use rumqttc::{AsyncClient, ConnAck, ConnectReturnCode, Event, LastWill, MqttOptions, Packet, QoS};
 use serde_json::Value;
 use serde_urlencoded;
 use serialport::available_ports;
 use std::fs::OpenOptions;
+use std::io::Write;
 use std::str;
 use std::sync::atomic::Ordering;
 use tauri::Manager;
 use tauri::State;
 use tokio::sync::Mutex;
 use tokio::time::Duration;
-use std::io::Write;
 
 pub struct MqttClient(Mutex<AsyncClient>);
 
@@ -35,6 +35,7 @@ pub struct BearerToken(String);
 #[tokio::main]
 async fn main() {
     //create a log file
+
     if !std::path::Path::new(
         "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/logs.txt",
     )
@@ -272,15 +273,6 @@ async fn main() {
 
     let (client, mut eventloop) = AsyncClient::new(mqttoptions, 10);
 
-    client
-        .subscribe("exalise/messages/#", QoS::AtMostOnce)
-        .await
-        .unwrap();
-    client
-        .subscribe("exalise/lastwill/#", QoS::AtMostOnce)
-        .await
-        .unwrap();
-
     let client_clone = client.clone();
     let client_clone_clone = client.clone();
     let device_key_clone = device_key_lastwill.clone();
@@ -302,7 +294,8 @@ async fn main() {
 
                     match notification {
                         Ok(s) => {
-                            //println!("{:?}", s);
+                            println!("{:?}", s);
+
                             if !connected {
                                 CONNECTED_TO_EXALISE.store(true, Ordering::Relaxed);
 
@@ -320,6 +313,27 @@ async fn main() {
                                 connected = true;
                             }
 
+                            if let Event::Incoming(Packet::PingResp) = s {
+                                main_window.emit("Ping", "check").unwrap();
+                            }
+
+                            if let Event::Incoming(Packet::ConnAck(ConnAck {
+                                session_present: _,
+                                code,
+                            })) = s
+                            {
+                                if let ConnectReturnCode::Success = code {
+                                    client
+                                        .subscribe("exalise/messages/#", QoS::AtMostOnce)
+                                        .await
+                                        .unwrap();
+                                    client
+                                        .subscribe("exalise/lastwill/#", QoS::AtMostOnce)
+                                        .await
+                                        .unwrap();
+                                }
+                            }
+
                             if let Event::Incoming(Packet::Publish(p)) = s {
                                 let payload = str::from_utf8(p.payload.as_ref())
                                     .expect("Error converting payload to string");
@@ -332,7 +346,7 @@ async fn main() {
                                 if vec_topic[1] == "messages" {
                                     if vec_topic.len() == 3 {
                                         let s: String =
-                                            format!("notification-{}", vec_topic[2]).to_owned();
+                                            format!("notification---{}", vec_topic[2]).to_owned();
                                         let s_slice: &str = &s[..];
 
                                         main_window.emit(s_slice, format!("{}", payload)).unwrap();
@@ -344,7 +358,7 @@ async fn main() {
                                             datapoint_key_split.collect();
 
                                         let s: String = format!(
-                                            "notification-{}-{}",
+                                            "notification---{}---{}",
                                             vec_topic[2], datapoint_key[0]
                                         )
                                         .to_owned();
@@ -354,7 +368,7 @@ async fn main() {
                                     }
                                 } else if vec_topic[1] == "lastwill" {
                                     let s: String =
-                                        format!("notification-{}", vec_topic[2]).to_owned();
+                                        format!("notification---{}", vec_topic[2]).to_owned();
                                     let s_slice: &str = &s[..];
 
                                     main_window.emit(s_slice, format!("{}", payload)).unwrap();
@@ -411,20 +425,54 @@ async fn main() {
             save_api_settings,
             get_api_settings,
             close_splashscreen,
-            write_to_log_file
+            write_to_log_file,
+            send_message
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
-#[tauri::command]
+#[tauri::command(async)]
+async fn send_message(
+    device_key: String,
+    datapoint: String,
+    value: String,
+    mqtt_client: State<'_, MqttClient>,
+) -> Result<bool, bool> {
+    let client = mqtt_client.0.lock().await;
+
+    match client
+        .publish(
+            format!("exalise/messages/{}/{}", device_key, datapoint),
+            QoS::AtLeastOnce,
+            false,
+            value.as_bytes().to_vec(),
+        )
+        .await
+    {
+        Ok(_ok) => {
+            println!(
+                "succes {}   ----   {}",
+                format!("exalise/messages/{}/{}", device_key, datapoint),
+                value
+            );
+            return Ok(true);
+        }
+        Err(err) => {
+            println!("{:?}", err);
+            return Err(false);
+        }
+    }
+}
+
+#[tauri::command(async)]
 async fn close_splashscreen(window: tauri::Window) {
-  // Close splashscreen
-  if let Some(splashscreen) = window.get_window("splashscreen") {
-    splashscreen.close().unwrap();
-  }
-  // Show main window
-  window.get_window("main").unwrap().show().unwrap();
+    // Close splashscreen
+    if let Some(splashscreen) = window.get_window("splashscreen") {
+        splashscreen.close().unwrap();
+    }
+    // Show main window
+    window.get_window("main").unwrap().show().unwrap();
 }
 
 #[tauri::command]
@@ -858,7 +906,6 @@ async fn get_dashboard(_exalise_settings: State<'_, ExaliseSettings>) -> Result<
     }
 }
 
-
 #[tauri::command(async)]
 async fn save_device_to_dashboard(device: Device) -> Result<Dashboard, String> {
     let _device_key = device.key.clone();
@@ -1042,25 +1089,17 @@ fn write_to_log_file(data: String) -> bool {
         .create(true)
         .append(true)
         .open("C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/logs.txt");
-    
+
     match file {
-        Ok(mut f) => {
-            match f.write_all(data.as_bytes()) {
-                Ok(_ok) => {
-                    return true
-                }
-                Err(_err) => {
-                    return false
-                }
-            }
-        }
-        Err(_e) => {
-            return false
-        }
+        Ok(mut f) => match f.write_all(data.as_bytes()) {
+            Ok(_ok) => return true,
+            Err(_err) => return false,
+        },
+        Err(_e) => return false,
     }
 }
 
-/* 
+/*
 Test updater
 
 .setup(|app| {
@@ -1080,8 +1119,8 @@ Test updater
             }
             Err(e) => {
                 //println!("ERROR: {}", e);
-            }  
-         }                
+            }
+         }
         }
         Err(e) => {
           //println!("ERROR: {}", e);

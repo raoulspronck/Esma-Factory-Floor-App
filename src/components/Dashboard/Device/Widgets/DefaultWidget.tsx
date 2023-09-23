@@ -53,7 +53,7 @@ const DefaultWidget: React.FC<DefaultWidgetProps> = ({
           setLoading(false);
         });
 
-      listen(`notification-${deviceKey}-${dataPoints[0]}`, (event) => {
+      listen(`notification---${deviceKey}---${dataPoints[0]}`, (event) => {
         setValue({
           value: event.payload as string,
           time: new Date().toISOString(),

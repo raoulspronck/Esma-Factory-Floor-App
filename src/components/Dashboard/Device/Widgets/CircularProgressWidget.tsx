@@ -52,11 +52,11 @@ const CircularProgressWidget: React.FC<CircularProgressWidgetProps> = ({
         })
         .catch((_err) => {});
 
-      listen(`notification-${deviceKey}-${dataPoints[0]}`, (event) => {
+      listen(`notification---${deviceKey}---${dataPoints[0]}`, (event) => {
         setValue(parseInt(event.payload as string));
       });
 
-      listen(`notification-${deviceKey}-${dataPoints[1]}`, (event) => {
+      listen(`notification---${deviceKey}---${dataPoints[1]}`, (event) => {
         setMaxValue(parseInt(event.payload as string));
       });
 

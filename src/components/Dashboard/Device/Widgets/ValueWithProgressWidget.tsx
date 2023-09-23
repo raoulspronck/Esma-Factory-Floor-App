@@ -60,7 +60,7 @@ const ValueWithProgressWidget: React.FC<ValueWithProgressWidgetProps> = ({
           setLoading(false);
         });
 
-      listen(`notification-${deviceKey}-${dataPoints[0]}`, (event) => {
+      listen(`notification---${deviceKey}---${dataPoints[0]}`, (event) => {
         if (prevValue.current !== 0) {
           let diff =
             ((parseFloat(event.payload as string) - prevValue.current) /

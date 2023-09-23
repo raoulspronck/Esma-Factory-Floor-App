@@ -136,7 +136,7 @@ const DeviceWidget: React.FC<DeviceWidgetProps> = ({
     if (!functionCalled.current) {
       functionCalled.current = true;
 
-      listen(`notification-${deviceBlock.key}`, (event) => {
+      listen(`notification---${deviceBlock.key}`, (event) => {
         if (event.payload === "connected") {
           setConnected(true);
         } else if (event.payload === "disconnected") {

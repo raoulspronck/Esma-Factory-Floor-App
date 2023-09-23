@@ -69,7 +69,7 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
           setLoading(false);
         });
 
-      listen(`notification-${deviceKey}-${dataPoints[0]}`, (event) => {
+      listen(`notification---${deviceKey}---${dataPoints[0]}`, (event) => {
         setValue(event.payload as string);
         setTimer(0);
       });
