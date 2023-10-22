@@ -215,6 +215,7 @@ const DeviceWidget: React.FC<DeviceWidgetProps> = ({
               setDashboard={setDashboard}
               dashboard={dashboard}
               setRefresh={setRefresh}
+              dataPoints={dataPoints}
             />
           ))
         : null}

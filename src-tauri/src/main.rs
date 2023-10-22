@@ -8,7 +8,8 @@ mod rs232;
 
 use crate::main_struct::{
     Alert, Alerts, ApiSettings, Dashboard, Debiteur, Device, ExaliseHttpSettings,
-    ExaliseMqttSettings, ExaliseSettings, Layout, LoginData, RS232Settings,
+    ExaliseMqttSettings, ExaliseSettings, LastValueStore, LastValueStoreItem, Layout, LoginData,
+    RS232Settings,
 };
 use crate::rs232::{
     automatic_start_rs232, start_file_receive, start_file_send, stop_file_receive, stop_file_send,
@@ -23,14 +24,57 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::str;
 use std::sync::atomic::Ordering;
+use tauri::api::process::{Command, CommandEvent};
 use tauri::Manager;
 use tauri::State;
 use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use tokio::time::Duration;
 
 pub struct MqttClient(Mutex<AsyncClient>);
 
 pub struct BearerToken(String);
+
+async fn find_and_update_or_insert_item_by_key(
+    last_value_store_mutex: State<'_, RwLock<LastValueStore>>,
+    key_to_find: &str,
+    new_value: &str,
+) {
+    let mut last_value_store_write = last_value_store_mutex.write().await;
+    let mut found = false;
+
+    for item in &mut last_value_store_write.lastvaluestoreitem {
+        if item.key == key_to_find {
+            item.value = new_value.to_string();
+            found = true;
+            break;
+        }
+    }
+
+    if !found {
+        // If the key was not found, add a new entry
+        last_value_store_write
+            .lastvaluestoreitem
+            .push(LastValueStoreItem {
+                key: key_to_find.to_string(),
+                value: new_value.to_string(),
+            });
+    }
+}
+
+async fn get_value_by_key(
+    last_value_store_mutex: State<'_, RwLock<LastValueStore>>,
+    key_to_find: &str,
+) -> Option<String> {
+    let last_value_store_read = last_value_store_mutex.read().await;
+
+    for item in &last_value_store_read.lastvaluestoreitem {
+        if item.key == key_to_find {
+            return Some(item.value.clone());
+        }
+    }
+    None
+}
 
 #[tokio::main]
 async fn main() {
@@ -281,20 +325,54 @@ async fn main() {
     tauri::Builder::default()
         .manage(MqttClient(Mutex::new(client_clone)))
         .manage(BearerToken("".into()))
+        .manage(RwLock::new(LastValueStore {
+            lastvaluestoreitem: Vec::new(),
+        }))
         .manage(exalise_settings)
         .manage(api_settings)
         .setup(move |app| {
+            // Run gesture control binary
+            let resource_path = app
+                .path_resolver()
+                .resolve_resource("binarieresources/gesture_recognizer.task")
+                .expect("failed to resolve resource");
+
+            let window = app.get_window("main").unwrap();
+            tauri::async_runtime::spawn(async move {
+                let (mut rx, _child) = Command::new_sidecar("main")
+                    .expect("failed to setup `app` sidecar")
+                    .args([format!("{:?}", &resource_path)])
+                    .spawn()
+                    .expect("Failed to spawn packaged node");
+
+                while let Some(event) = rx.recv().await {
+                    if let CommandEvent::Stdout(line) = event {
+                        let output = line.replace("\r", "").replace("\n", "");
+
+                        window
+                            .emit("gesture", Some(output))
+                            .expect("failed to emit event");
+                    }
+                }
+            });
+
+            // Run mqtt logic
             let main_window = app.get_window("main").unwrap();
             let main_window_2 = main_window.clone();
+
+            let app_handler = app.handle();
+
             tauri::async_runtime::spawn(async move {
                 // receive incoming notifications
                 let mut connected = false;
                 loop {
+                    let last_value_store = app_handler.state::<RwLock<LastValueStore>>();
+
                     let notification = eventloop.poll().await;
 
                     match notification {
                         Ok(s) => {
-                            println!("{:?}", s);
+                            // println!("{:?}", s);
 
                             if !connected {
                                 CONNECTED_TO_EXALISE.store(true, Ordering::Relaxed);
@@ -350,6 +428,17 @@ async fn main() {
                                         let s_slice: &str = &s[..];
 
                                         main_window.emit(s_slice, format!("{}", payload)).unwrap();
+
+                                        let key_to_find = vec_topic[2];
+                                        let new_value = payload;
+
+                                        // Find and update the item with the specified key, or insert a new entry
+                                        find_and_update_or_insert_item_by_key(
+                                            last_value_store,
+                                            key_to_find,
+                                            new_value,
+                                        )
+                                        .await;
                                     } else {
                                         // remove key from topic
                                         let datapoint_key_split = vec_topic[3].split("_");
@@ -357,14 +446,27 @@ async fn main() {
                                         let datapoint_key: Vec<&str> =
                                             datapoint_key_split.collect();
 
-                                        let s: String = format!(
-                                            "notification---{}---{}",
-                                            vec_topic[2], datapoint_key[0]
-                                        )
-                                        .to_owned();
+                                        let device_key = vec_topic[2];
+
+                                        let key_to_find =
+                                            format!("{}---{}", device_key, datapoint_key[0]);
+
+                                        let s: String =
+                                            format!("notification---{}", key_to_find).to_owned();
                                         let s_slice: &str = &s[..];
 
                                         main_window.emit(s_slice, format!("{}", payload)).unwrap();
+
+                                        let new_value = payload;
+                                        let key_to_find_str = key_to_find.as_str();
+
+                                        // Find and update the item with the specified key, or insert a new entry
+                                        find_and_update_or_insert_item_by_key(
+                                            last_value_store,
+                                            key_to_find_str,
+                                            new_value,
+                                        )
+                                        .await;
                                     }
                                 } else if vec_topic[1] == "lastwill" {
                                     let s: String =
@@ -387,6 +489,8 @@ async fn main() {
                     }
                 }
             });
+
+            // Start up rs232 communication
             automatic_start_rs232(
                 port_name,
                 baud_rate,
@@ -426,7 +530,8 @@ async fn main() {
             get_api_settings,
             close_splashscreen,
             write_to_log_file,
-            send_message
+            send_message,
+            // get_last_value_from_internal_store
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -1035,36 +1140,59 @@ async fn get_last_value(
     device_id: String,
     datapoint_key: String,
     exalise_settings: State<'_, ExaliseSettings>,
+    last_value_store: State<'_, RwLock<LastValueStore>>,
 ) -> Result<String, String> {
-    let device_key = exalise_settings.mqtt_settings.device_key.clone();
-    let http_key = exalise_settings.http_settings.http_key.clone();
-    let http_secret = exalise_settings.http_settings.http_secret.clone();
+    let last_value_store_mutex = last_value_store.clone();
 
-    let client = reqwest::Client::new();
-    let response = client
-        .get(format!(
-            "https://api.exalise.com/api/getvalue/{}/{}",
-            device_id, datapoint_key
-        ))
-        .header("x-api-key", http_key)
-        .header("x-api-secret", http_secret)
-        .header("x-master-device-key", device_key)
-        .send()
-        .await
-        .unwrap()
-        .text()
-        .await;
+    let key_to_find = format!("{}---{}", device_id, datapoint_key);
+    let key_to_find_str = key_to_find.as_str();
 
-    match response {
-        Ok(res) => {
-            ////println!("{}", res);
+    match get_value_by_key(last_value_store_mutex, key_to_find_str).await {
+        Some(res) => {
+            println!("Fetched from local storage");
             return Ok(res.into());
         }
-        Err(_err) => {
-            //println!("{}", err);
-            return Err("".into());
+        None => {
+            println!("Fetched from api");
+            let device_key = exalise_settings.mqtt_settings.device_key.clone();
+            let http_key = exalise_settings.http_settings.http_key.clone();
+            let http_secret = exalise_settings.http_settings.http_secret.clone();
+
+            let client = reqwest::Client::new();
+            let response = client
+                .get(format!(
+                    "https://api.exalise.com/api/getvalue/{}/{}",
+                    device_id, datapoint_key
+                ))
+                .header("x-api-key", http_key)
+                .header("x-api-secret", http_secret)
+                .header("x-master-device-key", device_key)
+                .send()
+                .await
+                .unwrap()
+                .text()
+                .await;
+
+            match response {
+                Ok(res) => {
+                    // Find and update the item with the specified key, or insert a new entry
+                    let value = res.clone();
+
+                    find_and_update_or_insert_item_by_key(
+                        last_value_store,
+                        key_to_find_str,
+                        value.as_str(),
+                    )
+                    .await;
+
+                    return Ok(res.into());
+                }
+                Err(_err) => {
+                    return Err("".into());
+                }
+            }
         }
-    }
+    };
 }
 
 #[tauri::command(async)]
@@ -1099,33 +1227,26 @@ fn write_to_log_file(data: String) -> bool {
     }
 }
 
-/*
-Test updater
+/* #[tauri::command(async)]
+async fn get_last_value_from_internal_store(
+    device_id: String,
+    datapoint_key: String,
+    last_value_store_mutex: State<'_, RwLock<LastValueStore>>,
+) -> Result<String, String> {
+    let last_value_store_read = last_value_store_mutex.read().await;
 
-.setup(|app| {
-    let handle = app.handle();
-    tauri::async_runtime::spawn(async move {
-      match handle
-        .updater()
-        .header("your-header", "value")
-        .unwrap()
-        .check()
-        .await
-      {
-        Ok(update) => {
-            match update.download_and_install().await{
-            Ok(_t) => {
-                //println!("Updated succesfully");
-            }
-            Err(e) => {
-                //println!("ERROR: {}", e);
-            }
-         }
+    let key_to_find = format!("{}---{}", device_id, datapoint_key);
+    let key_to_find_str = key_to_find.as_str();
+
+    match get_value_by_key(&last_value_store_read, key_to_find_str) {
+        Some(value) => {
+            println!("Some value found");
+            return Ok(value.into());
         }
-        Err(e) => {
-          //println!("ERROR: {}", e);
+        None => {
+            println!("No value found");
+            return Ok("".into());
         }
-      }
-    });
-    Ok(())
-  }) */
+    }
+}
+ */

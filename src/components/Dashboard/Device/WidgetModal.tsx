@@ -164,7 +164,7 @@ const WidgetModal: React.FC<WidgetModalProps> = ({
           {widgetSelected ? (
             <Flex flexDir={"column"}>
               <Heading size={"md"} mt={-5} fontWeight="medium">
-                Widget: {widget}
+                Widget: {widget.split("/")[0]}
               </Heading>
 
               <WidgetSetup
@@ -188,6 +188,35 @@ const WidgetModal: React.FC<WidgetModalProps> = ({
                         <StatNumber fontSize={"34px"}>234</StatNumber>
                         <StatHelpText>13h 30m 24s 20 Feb 2023</StatHelpText>
                       </Box>
+                    </Flex>
+                  </Stat>
+                </Box>
+              </Radio>
+
+              <Radio value="Two Default/Default/Default">
+                <Box width={"370px"} mt="20px">
+                  <Stat>
+                    <Flex>
+                      <Flex alignItems={"center"} flexDir={"column"}>
+                        <StatLabel fontSize={"18px"}>Aantal stuks af</StatLabel>
+
+                        <Box ml="auto" textAlign={"right"}>
+                          <StatNumber fontSize={"30px"}>234</StatNumber>
+                          <StatHelpText fontSize={"12px"}>
+                            13h 30m 24s 20 Feb 2023
+                          </StatHelpText>
+                        </Box>
+                      </Flex>
+                      <Flex alignItems={"center"} flexDir={"column"} ml="auto">
+                        <StatLabel fontSize={"18px"}>Aantal stuks af</StatLabel>
+
+                        <Box ml="auto" textAlign={"right"}>
+                          <StatNumber fontSize={"30px"}>234</StatNumber>
+                          <StatHelpText fontSize={"12px"}>
+                            13h 30m 24s 20 Feb 2023
+                          </StatHelpText>
+                        </Box>
+                      </Flex>
                     </Flex>
                   </Stat>
                 </Box>

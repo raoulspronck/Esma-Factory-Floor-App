@@ -1,11 +1,12 @@
 import { Flex, Box, IconButton } from "@chakra-ui/react";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { AiOutlineMinusSquare } from "react-icons/ai";
 import CircularProgressWidget from "./Widgets/CircularProgressWidget";
 import CircularProgressWidgetWithVariableColor from "./Widgets/CircularProgressWidgetWithVariableColor";
 import DefaultWidget from "./Widgets/DefaultWidget";
 import TimerWidget from "./Widgets/TimerWidget";
 import ValueWithProgressWidget from "./Widgets/ValueWithProgressWidget";
+import TimePredictionWidget from "./Widgets/TimePredictionWidget";
 
 interface DisplayWidgetProps {
   deviceKey: string;
@@ -42,6 +43,7 @@ interface DisplayWidgetProps {
     datapoints: string[];
   };
   setRefresh: React.Dispatch<React.SetStateAction<boolean>>;
+  dataPoints: any[];
 }
 
 const DisplayWidget: React.FC<DisplayWidgetProps> = ({
@@ -52,6 +54,7 @@ const DisplayWidget: React.FC<DisplayWidgetProps> = ({
   dashboard,
   setDashboard,
   setRefresh,
+  dataPoints,
 }) => {
   const deleteWidget = async () => {
     let widgetHeight = 1;
@@ -97,7 +100,75 @@ const DisplayWidget: React.FC<DisplayWidgetProps> = ({
     }, 10);
   };
 
-  switch (widget.name) {
+  const [type, setType] = useState([]);
+
+  useEffect(() => {
+    try {
+      const types = [];
+      for (let index = 0; index < widget.datapoints.length; index++) {
+        const currentDatapointType = dataPoints.find(
+          (e) => e.key === widget.datapoints[index]
+        ).type;
+        types.push(currentDatapointType);
+      }
+
+      setType(types);
+    } catch (_error) {}
+  }, [dataPoints]);
+
+  switch (widget.name.split("/")[0]) {
+    case "Two Default":
+      return (
+        <Flex alignItems={"center"}>
+          {widget.name.split("/")[1] === "Time prediction" ? (
+            <TimePredictionWidget
+              dataPoints={widget.datapoints}
+              deviceKey={deviceKey}
+              deviceId={deviceId}
+              types={type}
+              small={0}
+            />
+          ) : (
+            <DefaultWidget
+              dataPoints={widget.datapoints}
+              deviceKey={deviceKey}
+              deviceId={deviceId}
+              types={type}
+              small={0}
+            />
+          )}
+
+          {widget.name.split("/")[2] === "Time prediction" ? (
+            <TimePredictionWidget
+              dataPoints={widget.datapoints}
+              deviceKey={deviceKey}
+              deviceId={deviceId}
+              types={type}
+              small={1}
+            />
+          ) : (
+            <DefaultWidget
+              dataPoints={widget.datapoints}
+              deviceKey={deviceKey}
+              deviceId={deviceId}
+              types={type}
+              small={1}
+            />
+          )}
+
+          {layoutChangable ? (
+            <IconButton
+              icon={<AiOutlineMinusSquare />}
+              aria-label="Delete widget"
+              colorScheme={"blackAlpha"}
+              size="sm"
+              ml="1"
+              onClick={deleteWidget}
+            />
+          ) : null}
+        </Flex>
+      );
+
     case "Circular progress with variable color":
       return (
         <Flex alignItems={"center"}>
@@ -179,6 +250,7 @@ const DisplayWidget: React.FC<DisplayWidgetProps> = ({
               dataPoints={widget.datapoints}
               deviceKey={deviceKey}
               deviceId={deviceId}
+              types={type}
             />
           </Box>
 
@@ -204,6 +276,32 @@ const DisplayWidget: React.FC<DisplayWidgetProps> = ({
               dataPoints={widget.datapoints}
               deviceKey={deviceKey}
               deviceId={deviceId}
+              types={type}
+            />
+          </Box>
+
+          {layoutChangable ? (
+            <IconButton
+              icon={<AiOutlineMinusSquare />}
+              aria-label="Delete widget"
+              colorScheme={"blackAlpha"}
+              size="sm"
+              ml="1"
+              onClick={deleteWidget}
+            />
+          ) : null}
+        </Flex>
+      );
+
+    case "Time prediction":
+      return (
+        <Flex alignItems={"center"}>
+          <Box width={"100%"}>
+            <TimePredictionWidget
+              dataPoints={widget.datapoints}
+              deviceKey={deviceKey}
+              deviceId={deviceId}
+              types={type}
             />
           </Box>
 
@@ -228,6 +326,7 @@ const DisplayWidget: React.FC<DisplayWidgetProps> = ({
               dataPoints={widget.datapoints}
               deviceKey={deviceKey}
               deviceId={deviceId}
+              types={type}
             />
           </Box>
 

@@ -16,6 +16,7 @@ import {
   Spacer,
   Text,
   useDisclosure,
+  useToast,
 } from "@chakra-ui/react";
 import { invoke } from "@tauri-apps/api";
 import { listen } from "@tauri-apps/api/event";
@@ -51,7 +52,7 @@ import { exit } from "@tauri-apps/api/process"; //relaunch
 import { VscChromeClose, VscDebugRestart } from "react-icons/vsc";
 import { BsCheckCircle, BsFillCheckCircleFill } from "react-icons/bs";
 import { FiAlertCircle } from "react-icons/fi";
-
+import { formatDate } from "../utils/formatDate";
 interface TaskBarProps {
   login: boolean;
   setlayoutChangable: React.Dispatch<React.SetStateAction<boolean>>;
@@ -188,7 +189,11 @@ const TaskBar: React.FC<TaskBarProps> = ({
 
   const [errorInput, setErrorInput] = useState("");
 
+  const [currentDate, setCurrentDate] = useState(formatDate(""));
+
   const [pingTime, setPingTime] = useState(0);
+
+  const toast = useToast();
 
   const functionCalled = useRef(false);
   const functionCalledApi = useRef(false);
@@ -242,9 +247,21 @@ const TaskBar: React.FC<TaskBarProps> = ({
     );
   };
 
-  useEffect(() => {
-    let interval;
+  const acceptNotification = (notification: string) => {
+    let notification_split = notification.split("/");
+    let message = notification_split[1] + "/ alert accepted";
 
+    // send alert accepted
+    invoke("send_message", {
+      deviceKey: notification_split[0].split("---")[1],
+      datapoint: notification_split[0].split("---")[2],
+      value: message,
+    })
+      .then((e) => console.log("Message send"))
+      .catch((e) => console.log(e));
+  };
+
+  useEffect(() => {
     if (!functionCalled.current) {
       functionCalled.current = true;
 
@@ -272,8 +289,25 @@ const TaskBar: React.FC<TaskBarProps> = ({
         setPingTime(0);
       });
 
+      listen("gesture", (event) => {
+        console.log(event.payload);
+        if (event.payload === "Thumb_Up") {
+          // acknoledge first notification
+          if (activeAlerts.current.length > 0) {
+            // get first active notification
+            const firstAlert = activeAlerts.current[0];
+            // let notification_key = alert_key + "/" + message + "/" + alerts[i].require_accept;
+            const splittedAlert = firstAlert.split("/");
+            if (splittedAlert[2] !== "No") {
+              // we can aknoledge
+              acceptNotification(firstAlert);
+            }
+          }
+        }
+      });
+
       setPingTime(0);
-      interval = setInterval(() => {
+      setInterval(() => {
         setPingTime((e) => e - 1);
       }, 1000);
     }
@@ -282,6 +316,11 @@ const TaskBar: React.FC<TaskBarProps> = ({
   useEffect(() => {
     if (!functionCalledApi.current) {
       functionCalledApi.current = true;
+      // update current time
+      setInterval(() => {
+        setCurrentDate(formatDate(""));
+      }, 1000);
+
       //get exalise connection
       invoke("get_exalise_connection")
         .then((e) =>
@@ -352,22 +391,50 @@ const TaskBar: React.FC<TaskBarProps> = ({
 
             // check if it was included and if so remove it
             var index = activeAlerts.current.indexOf(
-              alert_key + "/" + message_without_aceptance
+              alert_key + "/" + message_without_aceptance + "/Yes"
             );
+
             if (index !== -1) {
               var tempArray = activeAlerts.current;
               tempArray.splice(index, 1);
 
               activeAlerts.current = [...tempArray];
               setDisplayActiveAlerts([...tempArray]);
+            } else {
+              index = activeAlerts.current.indexOf(
+                alert_key + "/" + message_without_aceptance + "/null"
+              );
+
+              if (index !== -1) {
+                var tempArray = activeAlerts.current;
+                tempArray.splice(index, 1);
+
+                activeAlerts.current = [...tempArray];
+                setDisplayActiveAlerts([...tempArray]);
+              }
             }
           } else {
-            let notification_key = alert_key + "/" + message;
+            let notification_key =
+              alert_key + "/" + message + "/" + alerts[i].require_accept;
             // If message not yet active, add it
             if (!activeAlerts.current.includes(notification_key)) {
               var tempArray = [notification_key, ...activeAlerts.current];
               activeAlerts.current = tempArray;
               setDisplayActiveAlerts(tempArray);
+
+              // if message does not need to be accepted , remove it from the list
+              if (alerts[i].require_accept === "No") {
+                setTimeout(() => {
+                  const array = displayActiveAlerts.filter(
+                    (e) => e === notification_key
+                  );
+                  setDisplayActiveAlerts(array);
+
+                  if (array.length === 0) {
+                    onClose();
+                  }
+                }, 10000);
+              }
             }
           }
 
@@ -382,20 +449,6 @@ const TaskBar: React.FC<TaskBarProps> = ({
     }
   }, [alerts]);
 
-  const acceptNotification = (notification: string) => {
-    let notification_split = notification.split("/");
-    let message = notification_split[1] + "/ alert accepted";
-
-    // send alert accepted
-    invoke("send_message", {
-      deviceKey: notification_split[0].split("---")[1],
-      datapoint: notification_split[0].split("---")[2],
-      value: message,
-    })
-      .then((e) => console.log(e))
-      .catch((e) => console.log(e));
-  };
-
   return (
     <>
       <Flex
@@ -406,6 +459,7 @@ const TaskBar: React.FC<TaskBarProps> = ({
         pl={"3"}
         boxShadow="rgba(9, 30, 66, 0.25) 0px 4px 8px -2px, rgba(9, 30, 66, 0.08) 0px 0px 0px 1px"
         width={"100%"}
+        position={"relative"}
       >
         <Menu gutter={5}>
           <MenuButton
@@ -456,7 +510,7 @@ const TaskBar: React.FC<TaskBarProps> = ({
         </Menu>
 
         {login ? (
-          <>
+          <Flex width={"fit-content"}>
             <Menu gutter={5}>
               <MenuButton
                 borderRadius={"5px"}
@@ -664,9 +718,9 @@ const TaskBar: React.FC<TaskBarProps> = ({
             >
               Logout
             </Button>
-          </>
+          </Flex>
         ) : (
-          <>
+          <Flex width={"250px"}>
             <Button
               bgColor="twitter.400"
               _expanded={{ bg: "twitter.500" }}
@@ -682,7 +736,7 @@ const TaskBar: React.FC<TaskBarProps> = ({
               onClose={onCloseLogin}
               setLogin={setLogin}
             />
-          </>
+          </Flex>
         )}
 
         {displayActiveAlerts.length > 0 ? (
@@ -698,9 +752,13 @@ const TaskBar: React.FC<TaskBarProps> = ({
           />
         ) : null}
 
+        <Spacer />
+        <Text fontSize={"25px"} style={{ transform: "scale(1, 0.9)" }} ml={2}>
+          {currentDate}
+        </Text>
+        <Spacer />
         <Flex
           alignItems={"center"}
-          ml={"auto"}
           //ml={displayActiveAlerts.length > 0 ? null : "auto"}
           width={"fit-content"}
           mr={5}
@@ -835,17 +893,19 @@ const TaskBar: React.FC<TaskBarProps> = ({
                   >
                     <Text marginRight={"20px"}>{alert[1]}</Text>
 
-                    <IconButton
-                      colorScheme="green"
-                      fontSize={"50px"}
-                      height={"70px"}
-                      width={"70px"}
-                      minW={"70px"}
-                      onClick={() => acceptNotification(a)}
-                      marginLeft={"auto"}
-                      icon={<BsCheckCircle />}
-                      aria-label={"Accept notification"}
-                    />
+                    {alert[2] === "No" ? null : (
+                      <IconButton
+                        colorScheme="green"
+                        fontSize={"50px"}
+                        height={"70px"}
+                        width={"70px"}
+                        minW={"70px"}
+                        onClick={() => acceptNotification(a)}
+                        marginLeft={"auto"}
+                        icon={<BsCheckCircle />}
+                        aria-label={"Accept notification"}
+                      />
+                    )}
                   </Flex>
                 );
               })}

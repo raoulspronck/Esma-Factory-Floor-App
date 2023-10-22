@@ -16,9 +16,13 @@ import {
   Button,
   Flex,
   IconButton,
+  Radio,
+  RadioGroup,
+  Stack,
 } from "@chakra-ui/react";
 import { invoke } from "@tauri-apps/api";
 import React, { useEffect, useState } from "react";
+import { GoTrashcan } from "react-icons/go";
 import { GrAdd } from "react-icons/gr";
 interface ManageAlertsModalProps {
   isOpen: boolean;
@@ -43,25 +47,53 @@ const ManageAlertsModal: React.FC<ManageAlertsModalProps> = ({
   const [datapoints, setDatapoints] = useState([]);
   const [datapoint, setDatapoint] = useState("");
 
+  const [acceptAlerts, setAcceptAlerts] = useState([]);
+  const [acceptAlert, setAcceptAlert] = useState("Yes");
+
   const [adding, setAdding] = useState(false);
-  const [localAlerts, setLocalAlerts] = useState([]);
+  const [localAlerts, setLocalAlerts] = useState([...alerts]);
 
   const saveAlerts = async () => {
     setAdding(false);
 
+    console.log(localAlerts);
+
     return await new Promise((res) =>
       invoke("save_alerts", {
-        alertItems: [...localAlerts, ...alerts],
+        alertItems: [...localAlerts],
       })
         .then((e) => {
-          setAlerts([...localAlerts, ...alerts]);
-          res(true);
+          if (e === "Saved") {
+            setAlerts([...localAlerts]);
+            res(true);
+          } else {
+            res(false);
+          }
         })
         .catch((err) => {
-          console.log(err);
           res(false);
         })
     );
+  };
+
+  function deleteObjectFromArray(
+    arr: any[],
+    value1ToDelete: string,
+    value2ToDelete: string
+  ): any[] {
+    return arr.filter(
+      (obj) =>
+        obj.device_key !== value1ToDelete || obj.data_point !== value2ToDelete
+    );
+  }
+
+  const deleteLocalAlert = (deviceKey: string, dataPoint: string) => {
+    const updatedArray = deleteObjectFromArray(
+      localAlerts,
+      deviceKey,
+      dataPoint
+    );
+    setLocalAlerts(updatedArray);
   };
 
   const getDevices = () => {
@@ -100,7 +132,12 @@ const ManageAlertsModal: React.FC<ManageAlertsModalProps> = ({
   }, [device]);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size={modalSize}>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size={modalSize}
+      onCloseComplete={() => setLocalAlerts(alerts)}
+    >
       <ModalOverlay />
       <ModalContent>
         <ModalHeader fontSize={["17px", "19px", "22px"]} mt={[-2, -2, -1]}>
@@ -108,37 +145,44 @@ const ManageAlertsModal: React.FC<ManageAlertsModalProps> = ({
         </ModalHeader>
         <ModalCloseButton size={buttonSize} />
         <ModalBody>
-          {alerts.length > 0 ? (
+          {localAlerts.length > 0 ? (
             <>
-              <Text>
-                {alerts.length + localAlerts.length} meldingen geconfigureerd
-              </Text>{" "}
-              {alerts.map((alert, key) => {
-                return (
-                  <Box width={"100%"} borderTop="solid 1px gray" key={key}>
-                    <Flex>
-                      <Text>Device:</Text>
-                      <Text ml="auto">{alert.device_key}</Text>
-                    </Flex>
-                    <Flex>
-                      <Text>Datapoint:</Text>
-                      <Text ml="auto">{alert.data_point}</Text>
-                    </Flex>
-                  </Box>
-                );
-              })}
+              <Text>{localAlerts.length} meldingen geconfigureerd</Text>
               {localAlerts.map((alert, key) => {
                 return (
-                  <Box width={"100%"} borderTop="solid 1px gray" key={key}>
-                    <Flex>
-                      <Text>Device:</Text>
-                      <Text ml="auto">{alert.device_key}</Text>
-                    </Flex>
-                    <Flex>
-                      <Text>Datapoint:</Text>
-                      <Text ml="auto">{alert.data_point}</Text>
-                    </Flex>
-                  </Box>
+                  <Flex
+                    width={"100%"}
+                    borderTop="solid 1px gray"
+                    key={key}
+                    alignItems={"center"}
+                  >
+                    <Box width={"100%"}>
+                      <Flex>
+                        <Text>Device:</Text>
+                        <Text ml="auto">{alert.device_key}</Text>
+                      </Flex>
+                      <Flex>
+                        <Text>Datapoint:</Text>
+                        <Text ml="auto">{alert.data_point}</Text>
+                      </Flex>
+                      <Flex>
+                        <Text>Required to accepts:</Text>
+                        <Text ml="auto">
+                          {alert.require_accept ? alert.require_accept : "True"}
+                        </Text>
+                      </Flex>
+                    </Box>
+                    <IconButton
+                      aria-label="Delete alert"
+                      icon={<GoTrashcan />}
+                      colorScheme="red"
+                      ml="1"
+                      size={"sm"}
+                      onClick={() => {
+                        deleteLocalAlert(alert.device_key, alert.data_point);
+                      }}
+                    />
+                  </Flex>
                 );
               })}
             </>
@@ -192,21 +236,45 @@ const ManageAlertsModal: React.FC<ManageAlertsModalProps> = ({
                   </FormControl>
                 </Box>
               )}
+              {datapoint === "" ? null : (
+                <Box mt={[-2, 0, 2]}>
+                  <FormControl>
+                    <FormLabel fontSize={["sm", "md", "lg"]}>
+                      Acception required?
+                    </FormLabel>
+
+                    <RadioGroup
+                      onChange={(e) => setAcceptAlert(e)}
+                      value={acceptAlert}
+                      size={buttonSize}
+                      ml="auto"
+                    >
+                      <Stack direction="row">
+                        <Radio value="Yes">Yes</Radio>
+                        <Radio value="No">No</Radio>
+                      </Stack>
+                    </RadioGroup>
+                  </FormControl>
+                </Box>
+              )}
               <Flex mt={2}>
                 <Button
                   colorScheme="twitter"
                   onClick={() => {
                     if (device !== "" && datapoint !== "") {
                       setLocalAlerts((e) => [
+                        ...e,
                         {
                           device_key: device,
                           data_point: datapoint,
+                          require_accept: acceptAlert,
                         },
-                        ...e,
                       ]);
+
                       setAdding(false);
                       setDevice("");
                       setDatapoint("");
+                      setAcceptAlert("Yes");
                     }
                   }}
                   size={"sm"}

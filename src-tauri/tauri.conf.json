@@ -12,10 +12,9 @@
   },
   "tauri": {
     "allowlist": {
-      "all": true,
       "fs": {
         "all": true,
-        "scope": ["*"]
+        "scope": ["*", "$RESOURCE/binarieresources/*"]
       },
       "path": {
         "all": true
@@ -24,6 +23,21 @@
         "all": true,
         "asset": true,
         "assetScope": ["**"]
+      },
+      "shell": {
+        "sidecar": true,
+        "scope": [
+          {
+            "name": "binaries/main",
+            "sidecar": true
+          }
+        ]
+      },
+      "process": {
+        "all": false,
+        "exit": true,
+        "relaunch": false,
+        "relaunchDangerousAllowSymlinkMacos": false
       }
     },
 
@@ -34,7 +48,7 @@
       "deb": {
         "depends": []
       },
-      "externalBin": [],
+      "externalBin": ["binaries/main"],
       "icon": [
         "icons/32x32.png",
         "icons/128x128.png",
@@ -44,7 +58,7 @@
       ],
       "identifier": "com.exalise.production-monitoring-software",
       "longDescription": "Software writen by exalise to monitor the overal production, cnc machines and transfer files between them",
-      "resources": [],
+      "resources": ["binarieresources/*"],
       "shortDescription": "",
       "targets": "all",
       "windows": {
@@ -80,7 +94,7 @@
         "fullscreen": true,
         "resizable": true,
         "title": "Exalise production monitoring software",
-        "width": 1920
+        "width": 1020
       },
       {
         "label": "splashscreen",

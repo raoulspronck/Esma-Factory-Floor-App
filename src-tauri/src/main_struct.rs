@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Debiteur {
     #[serde(alias = "DebId")]
@@ -23,12 +22,10 @@ pub struct ExaliseSettings {
     pub rs232_settings: RS232Settings,
 }
 
-
-
 #[derive(Deserialize, Serialize, Debug)]
 pub struct RS232Settings {
     pub port_name: String,
-    pub  baud_rate: u32,
+    pub baud_rate: u32,
     pub data_bits_number: u32,
     pub parity_string: u32,
     pub stop_bits_number: u32,
@@ -55,7 +52,7 @@ pub struct Dashboard {
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Layout {
-    pub  i: String,
+    pub i: String,
     pub x: i32,
     pub y: i32,
     pub w: i32,
@@ -67,7 +64,7 @@ pub struct Device {
     pub id: String,
     pub name: String,
     pub key: String,
-    pub  display: bool,
+    pub display: bool,
     pub widgets: Vec<Widget>,
 }
 
@@ -88,11 +85,22 @@ pub struct Alerts {
 pub struct Alert {
     pub device_key: String,
     pub data_point: String,
+    pub require_accept: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct ApiSettings {
     pub username: String,
-    pub password: String
+    pub password: String,
 }
 
+#[derive(Deserialize, Serialize, Debug)]
+pub struct LastValueStoreItem {
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct LastValueStore {
+    pub lastvaluestoreitem: Vec<LastValueStoreItem>,
+}

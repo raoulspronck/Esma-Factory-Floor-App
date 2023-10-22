@@ -5,6 +5,7 @@ import {
   Radio,
   RadioGroup,
   Select,
+  Text,
   Stack,
   useBreakpointValue,
 } from "@chakra-ui/react";
@@ -33,7 +34,121 @@ const WidgetSetup: React.FC<WidgetSetupProps> = ({
     setFinalWidget(widget);
   }, []);
 
-  switch (widget) {
+  // widget name Two Default / clean / progress
+
+  switch (widget.split("/")[0]) {
+    case "Two Default":
+      return (
+        <>
+          <Box mt={5}>
+            <Text fontSize={"24px"} fontWeight={"medium"}>
+              Value 1
+            </Text>
+            <FormControl>
+              <FormLabel fontSize={["sm", "md", "lg"]}>
+                Select a version
+              </FormLabel>
+              <RadioGroup
+                onChange={(i) => {
+                  setFinalWidget(
+                    (e) => e.split("/")[0] + "/" + i + "/" + e.split("/")[2]
+                  );
+                }}
+                value={finalWidget.split("/")[1]}
+              >
+                <Stack direction="row">
+                  <Radio value="Default">Clean</Radio>
+                  <Radio value="Time prediction">Time prediction</Radio>
+                </Stack>
+              </RadioGroup>
+            </FormControl>
+          </Box>
+          <Box mt={5}>
+            <FormControl>
+              <FormLabel fontSize={["sm", "md", "lg"]}>
+                Select datapoint
+              </FormLabel>
+
+              <Select
+                size={buttonSize}
+                ml="auto"
+                value={
+                  dataPointsSelected[0] === undefined
+                    ? ""
+                    : dataPointsSelected[0]
+                }
+                onChange={(e) =>
+                  setDataPointsSelected((i) => [
+                    e.target.value,
+                    i[1] === undefined ? "" : i[1],
+                  ])
+                }
+              >
+                <option>Select datapoint</option>
+                {dataPoints.map((e, key) => (
+                  <option value={e.key} key={key}>
+                    {e.key}
+                  </option>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+          <Box mt={5}>
+            <Text fontSize={"24px"} fontWeight={"medium"}>
+              Value 2
+            </Text>
+            <FormControl>
+              <FormLabel fontSize={["sm", "md", "lg"]}>
+                Select a version
+              </FormLabel>
+              <RadioGroup
+                onChange={(i) => {
+                  setFinalWidget(
+                    (e) => e.split("/")[0] + "/" + e.split("/")[1] + "/" + i
+                  );
+                }}
+                value={finalWidget.split("/")[2]}
+              >
+                <Stack direction="row">
+                  <Radio value="Default">Clean</Radio>
+                  <Radio value="Time prediction">Time prediction</Radio>
+                </Stack>
+              </RadioGroup>
+            </FormControl>
+          </Box>
+          <Box mt={5}>
+            <FormControl>
+              <FormLabel fontSize={["sm", "md", "lg"]}>
+                Select datapoint
+              </FormLabel>
+
+              <Select
+                size={buttonSize}
+                ml="auto"
+                value={
+                  dataPointsSelected[1] === undefined
+                    ? ""
+                    : dataPointsSelected[1]
+                }
+                onChange={(e) =>
+                  setDataPointsSelected((i) => [
+                    i[0] === undefined ? "" : i[0],
+                    e.target.value,
+                  ])
+                }
+              >
+                <option>Select datapoint</option>
+                {dataPoints.map((e, key) => (
+                  <option value={e.key} key={key}>
+                    {e.key}
+                  </option>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+        </>
+      );
+
     case "Circular progress":
       return (
         <>
@@ -193,6 +308,7 @@ const WidgetSetup: React.FC<WidgetSetupProps> = ({
                   <Radio value="Default">Clean</Radio>
                   <Radio value="Default progress up">Progress up green</Radio>
                   <Radio value="Default progress down">Progress up red</Radio>
+                  <Radio value="Time prediction">Time prediction</Radio>
                 </Stack>
               </RadioGroup>
             </FormControl>

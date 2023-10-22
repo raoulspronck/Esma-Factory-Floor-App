@@ -11,12 +11,12 @@ rust-version = "1.57"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [build-dependencies]
-tauri-build = { version = "1.2", features = [] }
+tauri-build = { version = "1.5.0", features = [] }
 
 [dependencies]
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-tauri = { version = "1.2", features = ["api-all", "updater"] }
+tauri = { version = "1.5.1", features = ["fs-all", "path-all", "process-command-api", "process-exit", "protocol-all", "shell-sidecar", "updater"] }
 tauri-plugin-store = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "dev" }
 serialport = "4.2.0"
 rumqttc = "0.20.0"
