@@ -104,3 +104,9 @@ pub struct LastValueStoreItem {
 pub struct LastValueStore {
     pub lastvaluestoreitem: Vec<LastValueStoreItem>,
 }
+
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct  BasicSettings {
+    pub gesture_control: String,
+}

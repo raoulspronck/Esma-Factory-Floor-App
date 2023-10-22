@@ -88,7 +88,7 @@ const TimePredictionWidget: React.FC<TimePredictionWidgetProps> = ({
     }
   }, []);
 
-  if (small != undefined) {
+  if (small !== undefined) {
     return (
       <Box width={"100%"} pr={3} pl={3} maxH="80px" minH={"80px"}>
         <Stat>

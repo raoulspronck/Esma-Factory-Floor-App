@@ -46,11 +46,13 @@ export const formatNumberValue = (value: string, type: string) => {
       return formatImageValue(value);
 
     case "number":
-      if (value.length > 10)
+      if (value.length > 10) {
         return (
           (Math.round(parseFloat(value) * 100000000) / 100000000).toString() +
           "..."
         );
+      }
+
       return value;
 
     default:

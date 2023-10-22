@@ -53,7 +53,7 @@ const DefaultWidget: React.FC<DefaultWidgetProps> = ({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!functionCalled.current && types[0] != undefined) {
+    if (!functionCalled.current && types[0] !== undefined) {
       invoke("get_last_value", {
         deviceId,
         datapointKey: small !== undefined ? dataPoints[small] : dataPoints[0],
@@ -96,7 +96,7 @@ const DefaultWidget: React.FC<DefaultWidgetProps> = ({
     }
   }, [types]);
 
-  if (small != undefined) {
+  if (small !== undefined) {
     return (
       <Box width={"100%"} pr={3} pl={3} maxH="80px" minH={"80px"}>
         <Stat>

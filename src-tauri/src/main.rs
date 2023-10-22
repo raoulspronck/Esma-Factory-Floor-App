@@ -9,7 +9,7 @@ mod rs232;
 use crate::main_struct::{
     Alert, Alerts, ApiSettings, Dashboard, Debiteur, Device, ExaliseHttpSettings,
     ExaliseMqttSettings, ExaliseSettings, LastValueStore, LastValueStoreItem, Layout, LoginData,
-    RS232Settings,
+    RS232Settings, BasicSettings
 };
 use crate::rs232::{
     automatic_start_rs232, start_file_receive, start_file_send, stop_file_receive, stop_file_send,
@@ -89,6 +89,53 @@ async fn main() {
             "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/logs.txt",
         )
         .unwrap();
+    }
+
+    // Some JSON input data as a &str. Maybe this comes from the user.
+    let default_basic_settings_string = r#"
+    {
+        "gesture_control": "False"  
+    }"#;
+
+    // Parse the string of data into serde_json::Value.
+    let default_basic_settings_json: BasicSettings = serde_json::from_str(default_basic_settings_string).unwrap();
+
+    let file_open = std::fs::read_to_string(
+        &"C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/basic.settings.json",
+    );
+
+    let basic_settings: BasicSettings;
+
+    match file_open {
+        Ok(v) => {
+            let res = serde_json::from_str::<BasicSettings>(&v);
+
+            match res {
+                Ok(r) => {
+                    basic_settings = r;
+                }
+                Err(_err) => {
+                    // save file with new settings
+                    // Save the JSON structure into the other file.
+                    std::fs::write(
+                        "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/basic.settings.json",
+                        serde_json::to_string_pretty(&default_basic_settings_json).unwrap(),
+                    )
+                    .unwrap();
+                     basic_settings = default_basic_settings_json;
+                }
+            }
+        }
+        Err(_e) => {
+            // save file with new settings
+            // Save the JSON structure into the other file.
+            std::fs::write(
+                "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/basic.settings.json",
+                serde_json::to_string_pretty(&default_basic_settings_json).unwrap(),
+            )
+            .unwrap();
+            basic_settings = default_basic_settings_json;
+        }
     }
 
     // Some JSON input data as a &str. Maybe this comes from the user.
@@ -332,29 +379,32 @@ async fn main() {
         .manage(api_settings)
         .setup(move |app| {
             // Run gesture control binary
-            let resource_path = app
+            if basic_settings.gesture_control == "True" {
+                let resource_path = app
                 .path_resolver()
                 .resolve_resource("binarieresources/gesture_recognizer.task")
                 .expect("failed to resolve resource");
 
-            let window = app.get_window("main").unwrap();
-            tauri::async_runtime::spawn(async move {
-                let (mut rx, _child) = Command::new_sidecar("main")
-                    .expect("failed to setup `app` sidecar")
-                    .args([format!("{:?}", &resource_path)])
-                    .spawn()
-                    .expect("Failed to spawn packaged node");
+                let window = app.get_window("main").unwrap();
+                tauri::async_runtime::spawn(async move {
+                    let (mut rx, _child) = Command::new_sidecar("main")
+                        .expect("failed to setup `app` sidecar")
+                        .args([format!("{:?}", &resource_path)])
+                        .spawn()
+                        .expect("Failed to spawn packaged node");
 
-                while let Some(event) = rx.recv().await {
-                    if let CommandEvent::Stdout(line) = event {
-                        let output = line.replace("\r", "").replace("\n", "");
+                    while let Some(event) = rx.recv().await {
+                        if let CommandEvent::Stdout(line) = event {
+                            let output = line.replace("\r", "").replace("\n", "");
 
-                        window
-                            .emit("gesture", Some(output))
-                            .expect("failed to emit event");
+                            window
+                                .emit("gesture", Some(output))
+                                .expect("failed to emit event");
+                        }
                     }
-                }
-            });
+                });
+            }
+            
 
             // Run mqtt logic
             let main_window = app.get_window("main").unwrap();

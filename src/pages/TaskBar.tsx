@@ -193,8 +193,6 @@ const TaskBar: React.FC<TaskBarProps> = ({
 
   const [pingTime, setPingTime] = useState(0);
 
-  const toast = useToast();
-
   const functionCalled = useRef(false);
   const functionCalledApi = useRef(false);
 
@@ -290,7 +288,6 @@ const TaskBar: React.FC<TaskBarProps> = ({
       });
 
       listen("gesture", (event) => {
-        console.log(event.payload);
         if (event.payload === "Thumb_Up") {
           // acknoledge first notification
           if (activeAlerts.current.length > 0) {
@@ -757,13 +754,7 @@ const TaskBar: React.FC<TaskBarProps> = ({
           {currentDate}
         </Text>
         <Spacer />
-        <Flex
-          alignItems={"center"}
-          //ml={displayActiveAlerts.length > 0 ? null : "auto"}
-          width={"fit-content"}
-          mr={5}
-          color="white"
-        >
+        <Flex alignItems={"center"} width={"fit-content"} mr={5} color="white">
           <ExaliseLogoBox size={28} />
           <Text
             fontSize={"18px"}

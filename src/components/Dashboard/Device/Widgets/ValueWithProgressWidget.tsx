@@ -55,7 +55,7 @@ const ValueWithProgressWidget: React.FC<ValueWithProgressWidgetProps> = ({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!functionCalled.current && types[0] != undefined) {
+    if (!functionCalled.current && types[0] !== undefined) {
       invoke("get_last_value", {
         deviceId,
         datapointKey: dataPoints[0],
