@@ -95,13 +95,6 @@
         "resizable": true,
         "title": "Exalise production monitoring software",
         "width": 1020
-      },
-      {
-        "label": "splashscreen",
-        "fullscreen": true,
-        "decorations": false,
-        "resizable": false,
-        "url": "splashscreen.html"
       }
     ]
   }

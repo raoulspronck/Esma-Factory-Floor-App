@@ -28,8 +28,6 @@ function App() {
   const { height } = useWindowSize();
 
   useEffect(() => {
-    invoke("close_splashscreen");
-
     onUpdaterEvent(({ error, status }) => {
       invoke("write_to_log_file", {
         data: `${status + " / " + error} \r\n`,
