@@ -344,6 +344,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
             </Flex>
             <Flex mt={"5"}>
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -358,6 +359,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
                 &#40;
               </Button>
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -372,6 +374,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
                 &#41;
               </Button>
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -386,6 +389,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
                 ^
               </Button>
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -400,6 +404,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
                 Sqrt()
               </Button>
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -416,6 +421,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
             </Flex>
             <Flex mt={"2"}>
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -427,6 +433,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
                 7
               </Button>
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -438,6 +445,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
                 8
               </Button>
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -449,6 +457,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
                 9
               </Button>
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -462,6 +471,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
                 &#247;
               </Button>
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -479,6 +489,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
 
             <Flex mt={"2"}>
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -490,6 +501,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
                 4
               </Button>
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -501,6 +513,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
                 5
               </Button>
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -512,6 +525,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
                 6
               </Button>
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -526,6 +540,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
               </Button>
 
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -542,6 +557,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
             </Flex>
             <Flex mt={"2"}>
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -553,6 +569,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
                 1
               </Button>
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -564,6 +581,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
                 2
               </Button>
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -575,6 +593,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
                 3
               </Button>
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -589,6 +608,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
               </Button>
 
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -605,6 +625,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
             </Flex>
             <Flex mt={"2"}>
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -618,6 +639,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
                 ,
               </Button>
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -632,6 +654,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
               </Button>
 
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -646,6 +669,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
               </Button>
 
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -660,6 +684,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
               </Button>
 
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -677,6 +702,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
 
             <Flex mt={"2"}>
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="twitter.700"
@@ -689,6 +715,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
               </Button>
 
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -701,6 +728,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
                 CE
               </Button>
               <Button
+                color="white"
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"
@@ -716,6 +744,7 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
         </ModalBody>
         <ModalFooter>
           <Button
+            color="white"
             bgColor="gray.500"
             _hover={{ bg: "gray.400" }}
             onClick={onClose}
@@ -736,6 +765,7 @@ export default CalculatorModal;
 
               
               <Button
+              color='white'
                 size={"lg"}
                 mr="2"
                 bgColor="gray.700"

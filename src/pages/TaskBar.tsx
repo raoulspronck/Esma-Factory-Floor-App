@@ -712,6 +712,7 @@ const TaskBar: React.FC<TaskBarProps> = ({
               bgColor="twitter.400"
               _expanded={{ bg: "twitter.500" }}
               onClick={() => setLogin(false)}
+              color="white"
             >
               Logout
             </Button>
@@ -724,6 +725,7 @@ const TaskBar: React.FC<TaskBarProps> = ({
               fontWeight={"light"}
               ml="2"
               onClick={onOpenLogin}
+              color="white"
             >
               Login
             </Button>
