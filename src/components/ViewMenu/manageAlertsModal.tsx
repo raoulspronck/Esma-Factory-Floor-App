@@ -22,7 +22,7 @@ import {
 } from "@chakra-ui/react";
 import { invoke } from "@tauri-apps/api";
 import React, { useEffect, useState } from "react";
-import { GoTrashcan } from "react-icons/go";
+import { BiTrash } from "react-icons/bi";
 import { GrAdd } from "react-icons/gr";
 interface ManageAlertsModalProps {
   isOpen: boolean;
@@ -174,7 +174,7 @@ const ManageAlertsModal: React.FC<ManageAlertsModalProps> = ({
                     </Box>
                     <IconButton
                       aria-label="Delete alert"
-                      icon={<GoTrashcan />}
+                      icon={<BiTrash />}
                       colorScheme="red"
                       ml="1"
                       size={"sm"}

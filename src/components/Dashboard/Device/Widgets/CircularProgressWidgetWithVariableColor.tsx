@@ -82,7 +82,7 @@ const CircularProgressWidgetWithVariableColor: React.FC<
   }, [deviceId, deviceKey, dataPoints]);
 
   useEffect(() => {
-    let interval: NodeJS.Timer;
+    let interval: any;
 
     if (color.startsWith("flashing")) {
       interval = setInterval(async () => {
