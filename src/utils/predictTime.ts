@@ -22,13 +22,13 @@ export const makeTimePrediction = (time: number) => {
       return new Date(now + time);
     } else {
       time = time - (eerstePauze - now);
-
       // We zitten na de eerste pauze we hebben nog 18600000ms te gaan
       if (time > 18600000) {
         time = time - 18600000;
       } else if (time > 7800000) {
         // voor het einde van de dag klaar
-        return new Date(middagPauzeEinde + (time - 780000));
+
+        return new Date(middagPauzeEinde + (time - 7800000));
       } else {
         // voor de middag pauze klaar
         return new Date(eerstePauzeEinde + time);
