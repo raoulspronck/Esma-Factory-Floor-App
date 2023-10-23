@@ -496,6 +496,29 @@ async fn main() {
 
                                         let device_key = vec_topic[2];
 
+                                        if device_key == device_key_clone && datapoint_key[0] == "Shutdown" {
+                                            if cfg!(target_os = "windows") {
+                                                // Windows
+                                                Command::new("shutdown")
+                                                    .args(&["/s", "/t", "0"])
+                                                    .output()
+                                                    .expect("Failed to shut down the computer");
+                                            } else if cfg!(target_os = "linux") {
+                                                // Linux
+                                                Command::new("shutdown")
+                                                    .args(&["-h", "now"])
+                                                    .output()
+                                                    .expect("Failed to shut down the computer");
+                                            } else if cfg!(target_os = "macos") {
+                                                // macOS
+                                                Command::new("shutdown")
+                                                    .args(&["-h", "now"])
+                                                    .output()
+                                                    .expect("Failed to shut down the computer");
+                                            }
+                                            continue
+                                        }
+
                                         let key_to_find =
                                             format!("{}---{}", device_key, datapoint_key[0]);
 
