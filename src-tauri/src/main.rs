@@ -587,6 +587,8 @@ async fn main() {
         .expect("error while running tauri application");
 }
 
+
+
 #[tauri::command(async)]
 async fn send_message(
     device_key: String,
