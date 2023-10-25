@@ -76,6 +76,7 @@ async fn get_value_by_key(
     None
 }
 
+
 #[tokio::main]
 async fn main() {
     //create a log file
@@ -368,6 +369,51 @@ async fn main() {
     let client_clone_clone = client.clone();
     let device_key_clone = device_key_lastwill.clone();
     let device_key_clone_clone = device_key_lastwill.clone();
+    let device_key_clone_clone_clone = device_key_lastwill.clone();
+
+    let http_key = exalise_settings.http_settings.http_key.clone();
+    let http_secret = exalise_settings.http_settings.http_secret.clone();
+    let http_client = reqwest::Client::new();
+    let response = http_client
+        .get("https://api.exalise.com/api/getisdayoff")
+        .header("x-api-key", http_key)
+        .header("x-api-secret", http_secret)
+        .header("x-master-device-key", device_key_clone_clone_clone)
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await;
+
+    match response {
+        Ok(res) => {
+            if res == "True" {
+                // Shutdown computer
+                if cfg!(target_os = "windows") {
+                    // Windows
+                    Command::new("shutdown")
+                        .args(&["/s", "/t", "0"])
+                        .output()
+                        .expect("Failed to shut down the computer");
+                } else if cfg!(target_os = "linux") {
+                    // Linux
+                    Command::new("shutdown")
+                        .args(&["-h", "now"])
+                        .output()
+                        .expect("Failed to shut down the computer");
+                } else if cfg!(target_os = "macos") {
+                    // macOS
+                    Command::new("shutdown")
+                        .args(&["-h", "now"])
+                        .output()
+                        .expect("Failed to shut down the computer");
+                }
+                
+            }
+        },
+        Err(err) => println!("{}" ,err),
+    }
+   
 
     tauri::Builder::default()
         .manage(MqttClient(Mutex::new(client_clone)))
@@ -1222,11 +1268,9 @@ async fn get_last_value(
 
     match get_value_by_key(last_value_store_mutex, key_to_find_str).await {
         Some(res) => {
-            println!("Fetched from local storage");
             return Ok(res.into());
         }
         None => {
-            println!("Fetched from api");
             let device_key = exalise_settings.mqtt_settings.device_key.clone();
             let http_key = exalise_settings.http_settings.http_key.clone();
             let http_secret = exalise_settings.http_settings.http_secret.clone();
