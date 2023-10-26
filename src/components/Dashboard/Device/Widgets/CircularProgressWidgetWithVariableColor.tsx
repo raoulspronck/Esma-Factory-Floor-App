@@ -29,6 +29,7 @@ const CircularProgressWidgetWithVariableColor: React.FC<
     if (!functionCalled.current) {
       invoke("get_last_value", {
         deviceId,
+        deviceKey,
         datapointKey: dataPoints[0],
       })
         .then((e: any) => {
@@ -42,6 +43,7 @@ const CircularProgressWidgetWithVariableColor: React.FC<
 
       invoke("get_last_value", {
         deviceId,
+        deviceKey,
         datapointKey: dataPoints[1],
       })
         .then((e: any) => {
@@ -55,6 +57,7 @@ const CircularProgressWidgetWithVariableColor: React.FC<
 
       invoke("get_last_value", {
         deviceId,
+        deviceKey,
         datapointKey: dataPoints[2],
       })
         .then((e: any) => {

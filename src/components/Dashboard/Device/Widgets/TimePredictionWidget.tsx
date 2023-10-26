@@ -54,6 +54,7 @@ const TimePredictionWidget: React.FC<TimePredictionWidgetProps> = ({
     if (!functionCalled.current) {
       invoke("get_last_value", {
         deviceId,
+        deviceKey,
         datapointKey: small !== undefined ? dataPoints[small] : dataPoints[0],
       })
         .then((e: any) => {

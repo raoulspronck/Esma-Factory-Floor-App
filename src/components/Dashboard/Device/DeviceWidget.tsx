@@ -79,8 +79,6 @@ const DeviceWidget: React.FC<DeviceWidgetProps> = ({
       devices: dashboard.devices.filter((e) => e.id !== deviceBlock.id),
     };
 
-    console.log(newDashboard);
-
     setDashboard(newDashboard);
   };
 

@@ -40,6 +40,7 @@ async fn find_and_update_or_insert_item_by_key(
     key_to_find: &str,
     new_value: &str,
 ) {
+
     let mut last_value_store_write = last_value_store_mutex.write().await;
     let mut found = false;
 
@@ -525,6 +526,7 @@ async fn main() {
 
                                         let key_to_find = vec_topic[2];
                                         let new_value = payload;
+
 
                                         // Find and update the item with the specified key, or insert a new entry
                                         find_and_update_or_insert_item_by_key(
@@ -1257,13 +1259,14 @@ async fn get_device(
 #[tauri::command(async)]
 async fn get_last_value(
     device_id: String,
+    device_key: String,
     datapoint_key: String,
     exalise_settings: State<'_, ExaliseSettings>,
     last_value_store: State<'_, RwLock<LastValueStore>>,
 ) -> Result<String, String> {
     let last_value_store_mutex = last_value_store.clone();
 
-    let key_to_find = format!("{}---{}", device_id, datapoint_key);
+    let key_to_find = format!("{}---{}", device_key, datapoint_key);
     let key_to_find_str = key_to_find.as_str();
 
     match get_value_by_key(last_value_store_mutex, key_to_find_str).await {

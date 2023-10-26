@@ -28,6 +28,7 @@ const CircularProgressWidget: React.FC<CircularProgressWidgetProps> = ({
     if (!functionCalled.current) {
       invoke("get_last_value", {
         deviceId,
+        deviceKey,
         datapointKey: dataPoints[0],
       })
         .then((e: any) => {
@@ -41,6 +42,7 @@ const CircularProgressWidget: React.FC<CircularProgressWidgetProps> = ({
 
       invoke("get_last_value", {
         deviceId,
+        deviceKey,
         datapointKey: dataPoints[1],
       })
         .then((e: any) => {

@@ -56,6 +56,7 @@ const DefaultWidget: React.FC<DefaultWidgetProps> = ({
     if (!functionCalled.current && types[0] !== undefined) {
       invoke("get_last_value", {
         deviceId,
+        deviceKey,
         datapointKey: small !== undefined ? dataPoints[small] : dataPoints[0],
       })
         .then((e: any) => {

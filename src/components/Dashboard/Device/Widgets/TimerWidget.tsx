@@ -43,6 +43,7 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
     if (!functionCalled.current) {
       invoke("get_last_value", {
         deviceId,
+        deviceKey,
         datapointKey: dataPoints[0],
       })
         .then((e: any) => {
