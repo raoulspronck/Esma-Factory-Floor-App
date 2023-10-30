@@ -109,4 +109,5 @@ pub struct LastValueStore {
 #[derive(Deserialize, Serialize, Debug)]
 pub struct  BasicSettings {
     pub gesture_control: String,
+    pub automatic_load_dashboard: String
 }

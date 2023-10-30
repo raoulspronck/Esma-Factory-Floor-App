@@ -96,7 +96,8 @@ async fn main() {
     // Some JSON input data as a &str. Maybe this comes from the user.
     let default_basic_settings_string = r#"
     {
-        "gesture_control": "False"  
+        "gesture_control": "False",
+        "automatic_load_dashboard": "True"
     }"#;
 
     // Parse the string of data into serde_json::Value.
@@ -229,6 +230,9 @@ async fn main() {
         }
     }
 
+    
+    
+
     // Some JSON input data as a &str. Maybe this comes from the user.
     let default_dashboard_string = r#"
         {
@@ -236,8 +240,35 @@ async fn main() {
             "devices": []
         }"#;
 
+
+
+
     // Parse the string of data into serde_json::Value.
-    let default_dashboard_json: Dashboard = serde_json::from_str(default_dashboard_string).unwrap();
+    let mut default_dashboard_json: Dashboard = serde_json::from_str(default_dashboard_string).unwrap();
+
+
+    let http_client = reqwest::Client::new();
+
+    if basic_settings.automatic_load_dashboard == "True" {
+        // Load default dashboard gist
+        let response = http_client
+            .get("https://gist.githubusercontent.com/raoulspronck/60df74173b8ff477eb5af601f8007f59/raw")
+            .send()
+            .await
+            .unwrap()
+            .text()
+            .await;
+
+        match response {
+            Ok(res) => {
+                
+                default_dashboard_json = serde_json::from_str(&*res).unwrap();
+            }
+            Err(_err) => {}
+        };
+    }
+
+   
 
     let file_open = std::fs::read_to_string(
         &"C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
@@ -248,7 +279,14 @@ async fn main() {
             let res = serde_json::from_str::<Dashboard>(&v);
 
             match res {
-                Ok(_r) => {}
+                Ok(_r) => {
+                    // Always save default dashboard
+                    std::fs::write(
+                        "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
+                        serde_json::to_string_pretty(&default_dashboard_json).unwrap(),
+                    )
+                    .unwrap();
+                }
                 Err(_err) => {
                     // save file with new settings
                     // Save the JSON structure into the other file.
@@ -374,7 +412,6 @@ async fn main() {
 
     let http_key = exalise_settings.http_settings.http_key.clone();
     let http_secret = exalise_settings.http_settings.http_secret.clone();
-    let http_client = reqwest::Client::new();
     let response = http_client
         .get("https://api.exalise.com/api/getisdayoff")
         .header("x-api-key", http_key)
@@ -650,6 +687,8 @@ async fn main() {
             close_splashscreen,
             write_to_log_file,
             send_message,
+            get_basic_settings,
+            save_basic_settings
             // get_last_value_from_internal_store
         ])
         .run(tauri::generate_context!())
@@ -1006,6 +1045,25 @@ fn save_api_settings(username: String, password: String) -> Result<String, Strin
 }
 
 #[tauri::command]
+fn save_basic_settings(gesture: String, dashboard: String) -> Result<String, String> {
+    let basic_settings: BasicSettings = BasicSettings { gesture_control: gesture.clone(), automatic_load_dashboard: dashboard.clone() };
+
+    // Save the JSON structure into the other file.
+    let res = std::fs::write(
+        "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/basic.settings.json",
+        serde_json::to_string_pretty(&basic_settings).unwrap(),
+    );
+
+    match res {
+        Ok(_v) => return Ok("Saved".into()),
+        Err(_e) => {
+            //println!("{:?}", e);
+            return Ok("Error".into());
+        }
+    }
+}
+
+#[tauri::command]
 fn save_exalise_http_settings(
     http_key: String,
     http_secret: String,
@@ -1104,6 +1162,21 @@ fn get_exalise_settings() -> Result<String, String> {
 fn get_api_settings() -> Result<String, String> {
     let res = std::fs::read_to_string(
         &"C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/api.settings.json",
+    );
+
+    match res {
+        Ok(v) => return Ok(v),
+        Err(_e) => {
+            //println!("{:?}", e);
+            return Ok("Error".into());
+        }
+    }
+}
+
+#[tauri::command]
+fn get_basic_settings() -> Result<String, String> {
+    let res = std::fs::read_to_string(
+        &"C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/basic.settings.json",
     );
 
     match res {

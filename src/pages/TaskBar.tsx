@@ -24,6 +24,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   AiOutlineApi,
   AiOutlineCloudUpload,
+  AiOutlineSetting,
   AiOutlineUsb,
 } from "react-icons/ai";
 import { BiExport, BiImport } from "react-icons/bi";
@@ -53,6 +54,7 @@ import { VscChromeClose, VscDebugRestart } from "react-icons/vsc";
 import { BsCheckCircle, BsFillCheckCircleFill } from "react-icons/bs";
 import { FiAlertCircle } from "react-icons/fi";
 import { formatDate } from "../utils/formatDate";
+import GeneralSettingsModal from "../components/SettingsMenu/generalSettingsModal";
 interface TaskBarProps {
   login: boolean;
   setlayoutChangable: React.Dispatch<React.SetStateAction<boolean>>;
@@ -164,6 +166,12 @@ const TaskBar: React.FC<TaskBarProps> = ({
     onClose: onCloseApiSettings,
   } = useDisclosure();
 
+  const {
+    isOpen: isOpenGeneralSettings,
+    onOpen: onOpenGeneralSettings,
+    onClose: onCloseGeneralSettings,
+  } = useDisclosure();
+
   const [fileSend, setFileSend] = useState(false);
   const [fileReceive, setFileReceive] = useState(false);
 
@@ -182,6 +190,9 @@ const TaskBar: React.FC<TaskBarProps> = ({
 
   const [apiUsername, setApiUsername] = useState("");
   const [apiPassword, setApiPassword] = useState("");
+
+  const [gestureControl, setGestureControl] = useState("");
+  const [automaticLoadDashboard, setAutomaticLoadDashboard] = useState("");
 
   const [fileSendStatus, setFileSendStatus] = useState("");
   const [fileSendProgress, setFileProgress] = useState("");
@@ -335,6 +346,15 @@ const TaskBar: React.FC<TaskBarProps> = ({
       //get alerts
       invoke("get_alerts")
         .then((e) => setAlerts(JSON.parse(e as string).alerts)) //
+        .catch((e) => console.log(e));
+
+      //get alerts
+      invoke("get_basic_settings")
+        .then((e) => {
+          const res = JSON.parse(e as string);
+          setGestureControl(res.gesture_control);
+          setAutomaticLoadDashboard(res.automatic_load_dashboard);
+        }) //
         .catch((e) => console.log(e));
 
       //get exalise settings
@@ -608,6 +628,26 @@ const TaskBar: React.FC<TaskBarProps> = ({
                   setApiUsername={setApiUsername}
                   isOpen={isOpenApiSettings}
                   onClose={onCloseApiSettings}
+                />
+
+                <MenuItem
+                  onClick={onOpenGeneralSettings}
+                  bgColor="twitter.400"
+                  _hover={{ bg: "twitter.500" }}
+                >
+                  <Flex alignItems={"center"} width="100%">
+                    <Icon as={AiOutlineSetting} />
+                    <Text ml={2}>General Settings</Text>
+                  </Flex>
+                </MenuItem>
+
+                <GeneralSettingsModal
+                  isOpen={isOpenGeneralSettings}
+                  onClose={onCloseGeneralSettings}
+                  automaticLoadDashboard={automaticLoadDashboard}
+                  gestureControl={gestureControl}
+                  setAutomaticLoadDashboard={setAutomaticLoadDashboard}
+                  setGestureControl={setGestureControl}
                 />
               </MenuList>
             </Menu>
