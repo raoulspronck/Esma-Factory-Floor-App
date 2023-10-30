@@ -7,6 +7,8 @@ import DefaultWidget from "./Widgets/DefaultWidget";
 import TimerWidget from "./Widgets/TimerWidget";
 import ValueWithProgressWidget from "./Widgets/ValueWithProgressWidget";
 import TimePredictionWidget from "./Widgets/TimePredictionWidget";
+import SwitchWidget from "./Widgets/SwitchWidget";
+import SliderWidget from "./Widgets/SliderWidget";
 
 interface DisplayWidgetProps {
   deviceKey: string;
@@ -44,6 +46,7 @@ interface DisplayWidgetProps {
   };
   setRefresh: React.Dispatch<React.SetStateAction<boolean>>;
   dataPoints: any[];
+  small?: number;
 }
 
 const DisplayWidget: React.FC<DisplayWidgetProps> = ({
@@ -55,6 +58,7 @@ const DisplayWidget: React.FC<DisplayWidgetProps> = ({
   setDashboard,
   setRefresh,
   dataPoints,
+  small,
 }) => {
   const deleteWidget = async () => {
     let widgetHeight = 1;
@@ -201,6 +205,56 @@ const DisplayWidget: React.FC<DisplayWidgetProps> = ({
               deviceId={deviceId}
               dataPoints={widget.datapoints}
               deviceKey={deviceKey}
+            />
+          </Box>
+
+          {layoutChangable ? (
+            <IconButton
+              icon={<AiOutlineMinusSquare />}
+              aria-label="Delete widget"
+              colorScheme={"blackAlpha"}
+              size="sm"
+              ml="1"
+              onClick={deleteWidget}
+            />
+          ) : null}
+        </Flex>
+      );
+
+    case "Switch":
+      return (
+        <Flex alignItems={"center"}>
+          <Box width={"100%"}>
+            <SwitchWidget
+              deviceId={deviceId}
+              dataPoints={widget.datapoints}
+              deviceKey={deviceKey}
+              types={type}
+            />
+          </Box>
+
+          {layoutChangable ? (
+            <IconButton
+              icon={<AiOutlineMinusSquare />}
+              aria-label="Delete widget"
+              colorScheme={"blackAlpha"}
+              size="sm"
+              ml="1"
+              onClick={deleteWidget}
+            />
+          ) : null}
+        </Flex>
+      );
+
+    case "Slider":
+      return (
+        <Flex alignItems={"center"}>
+          <Box width={"100%"}>
+            <SliderWidget
+              deviceId={deviceId}
+              dataPoints={widget.datapoints}
+              deviceKey={deviceKey}
+              types={type}
             />
           </Box>
 

@@ -58,7 +58,14 @@ const WidgetSetup: React.FC<WidgetSetupProps> = ({
               >
                 <Stack direction="row">
                   <Radio value="Default">Clean</Radio>
+                  <Radio value="Default progress up">Progress up green</Radio>
+                  <Radio value="Default progress down">Progress up red</Radio>
                   <Radio value="Time prediction">Time prediction</Radio>
+                </Stack>
+                <Stack direction="row">
+                  <Radio value="Button">Button</Radio>
+                  <Radio value="Switch">Switch</Radio>
+                  <Radio value="Slider">Slider</Radio>
                 </Stack>
               </RadioGroup>
             </FormControl>
@@ -111,7 +118,14 @@ const WidgetSetup: React.FC<WidgetSetupProps> = ({
               >
                 <Stack direction="row">
                   <Radio value="Default">Clean</Radio>
+                  <Radio value="Default progress up">Progress up green</Radio>
+                  <Radio value="Default progress down">Progress up red</Radio>
                   <Radio value="Time prediction">Time prediction</Radio>
+                </Stack>
+                <Stack direction="row">
+                  <Radio value="Button">Button</Radio>
+                  <Radio value="Switch">Switch</Radio>
+                  <Radio value="Slider">Slider</Radio>
                 </Stack>
               </RadioGroup>
             </FormControl>
@@ -309,6 +323,11 @@ const WidgetSetup: React.FC<WidgetSetupProps> = ({
                   <Radio value="Default progress up">Progress up green</Radio>
                   <Radio value="Default progress down">Progress up red</Radio>
                   <Radio value="Time prediction">Time prediction</Radio>
+                </Stack>
+                <Stack direction="row">
+                  <Radio value="Button">Button</Radio>
+                  <Radio value="Switch">Switch</Radio>
+                  <Radio value="Slider">Slider</Radio>
                 </Stack>
               </RadioGroup>
             </FormControl>
