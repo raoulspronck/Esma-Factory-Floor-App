@@ -11,6 +11,7 @@ import { listen } from "@tauri-apps/api/event";
 import React, { useEffect, useRef, useState } from "react";
 import { formatDate } from "../../../../utils/formatDate";
 import { formatNumberValue } from "../../../../utils/formatValue";
+import { emitter } from "../../../../index";
 
 interface TimePredictionWidgetProps {
   deviceId: string;
@@ -43,50 +44,56 @@ const TimePredictionWidget: React.FC<TimePredictionWidgetProps> = ({
   dataPoints,
   small,
 }) => {
-  const functionCalled = useRef(false);
   const [value, setValue] = useState({
     value: "",
     time: "",
   });
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!functionCalled.current) {
-      invoke("get_last_value", {
-        deviceId,
-        deviceKey,
-        datapointKey: small !== undefined ? dataPoints[small] : dataPoints[0],
-      })
-        .then((e: any) => {
-          try {
-            let valueJson = JSON.parse(e);
+  const fetchValue = () => {
+    setLoading(true);
+    invoke("get_last_value", {
+      deviceId,
+      deviceKey,
+      datapointKey: small !== undefined ? dataPoints[small] : dataPoints[0],
+    })
+      .then((e: any) => {
+        try {
+          let valueJson = JSON.parse(e);
 
-            setValue({
-              value: formatNumberValue(valueJson.value, "TimePrediction"),
-              time: valueJson.createdAt,
-            });
-          } catch (_error) {}
-
-          setLoading(false);
-        })
-        .catch((_err) => {
-          setLoading(false);
-        });
-
-      listen(
-        `notification---${deviceKey}---${
-          small !== undefined ? dataPoints[small] : dataPoints[0]
-        }`,
-        (event) => {
           setValue({
-            value: formatNumberValue(event.payload as string, "TimePrediction"),
-            time: new Date().toISOString(),
+            value: formatNumberValue(valueJson.value, "TimePrediction"),
+            time: valueJson.createdAt,
           });
-        }
-      );
+        } catch (_error) {}
 
-      functionCalled.current = true;
-    }
+        setLoading(false);
+      })
+      .catch((_err) => {
+        setLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    emitter.on("refetch", fetchValue);
+
+    fetchValue();
+
+    const unlisten = listen(
+      `notification---${deviceKey}---${
+        small !== undefined ? dataPoints[small] : dataPoints[0]
+      }`,
+      (event) => {
+        setValue({
+          value: formatNumberValue(event.payload as string, "TimePrediction"),
+          time: new Date().toISOString(),
+        });
+      }
+    );
+    return () => {
+      emitter.off("refetch", fetchValue);
+      unlisten.then((f) => f());
+    };
   }, []);
 
   if (small !== undefined) {

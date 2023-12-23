@@ -4,6 +4,10 @@ import { FaCalculator } from "react-icons/fa";
 import CncIcon from "../icons/CncIcon";
 import CalculatorModal from "./modals/CalculatorModal";
 import SpindleModal from "./modals/SpindleModal";
+import CallingAlert from "./alerts/CallingAlert";
+import DynamicComponent from "../DynamicIconImport";
+import { MdQuiz } from "react-icons/md";
+import QuizModal from "./modals/QuizModal";
 
 const QuickToolBar: React.FC<{ children?: React.ReactNode }> = ({
   children,
@@ -14,20 +18,20 @@ const QuickToolBar: React.FC<{ children?: React.ReactNode }> = ({
     onClose: onCloseCalculator,
   } = useDisclosure();
   const {
-    isOpen: isOpenSpindle,
-    onOpen: onOpenSpindle,
-    onClose: onCloseSpindle,
+    isOpen: isOpenQuiz,
+    onOpen: onOpenQuiz,
+    onClose: onCloseQuiz,
   } = useDisclosure();
 
-  /*  const {
+  const {
     isOpen: isOpenCallingAlert,
     onOpen: onOpenCallingAlert,
     onClose: onCloseCallingAlert,
-  } = useDisclosure(); */
+  } = useDisclosure();
 
-  /*  const callJohn = () => {
+  const callJohn = () => {
     onOpenCallingAlert();
-  }; */
+  };
 
   return (
     <Flex
@@ -41,8 +45,8 @@ const QuickToolBar: React.FC<{ children?: React.ReactNode }> = ({
 
       <Box bgColor={"gray.400"} width="2px" height={"80%"} mr="5" ml="5" />
 
-      {/* <IconButton
-        icon={<GiBugleCall />}
+      <IconButton
+        icon={<DynamicComponent techs={["CallSharp"]} />}
         aria-label="Bel john"
         colorScheme={"blackAlpha"}
         height={"80px"}
@@ -50,7 +54,7 @@ const QuickToolBar: React.FC<{ children?: React.ReactNode }> = ({
         fontSize={"50px"}
         onClick={() => callJohn()}
         mr={3}
-      /> */}
+      />
 
       <IconButton
         icon={<FaCalculator />}
@@ -64,19 +68,18 @@ const QuickToolBar: React.FC<{ children?: React.ReactNode }> = ({
 
       <IconButton
         ml={3}
-        icon={<CncIcon color={"white"} />}
-        aria-label="frees"
+        icon={<MdQuiz color={"white"} />}
+        aria-label="quiz"
         colorScheme={"blackAlpha"}
         height={"80px"}
         width="80px"
         fontSize={"50px"}
-        onClick={onOpenSpindle}
+        onClick={onOpenQuiz}
       />
 
+      <CallingAlert isOpen={isOpenCallingAlert} onClose={onCloseCallingAlert} />
       <CalculatorModal isOpen={isOpenCalculator} onClose={onCloseCalculator} />
-      <SpindleModal isOpen={isOpenSpindle} onClose={onCloseSpindle} />
-
-      {/*  <CallingAlert isOpen={isOpenCallingAlert} onClose={onCloseCallingAlert} /> */}
+      <QuizModal isOpen={isOpenQuiz} onClose={onCloseQuiz} />
     </Flex>
   );
 };

@@ -49,7 +49,7 @@ const ConfigurableDashboard: React.FC<ConfigurableDashboardProps> = ({
   const [refresh, setRefresh] = useState(false);
 
   const saveLayout = () => {
-    const newLayout = dashboard.layout.map((item: any) => {
+    const newLayout = currentLayout.map((item: any) => {
       return {
         i: item.i,
         x: item.x,

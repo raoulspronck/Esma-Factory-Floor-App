@@ -2,6 +2,7 @@ import { Box, Text } from "@chakra-ui/react";
 import { invoke } from "@tauri-apps/api";
 import { listen } from "@tauri-apps/api/event";
 import React, { useEffect, useRef, useState } from "react";
+import { emitter } from "../../../../index";
 
 function convertSecondsToHhMmSs({ time }: { time: number }): string {
   var negative = time < 0 ? true : false;
@@ -34,50 +35,60 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
   dataPoints,
   deviceKey,
 }) => {
-  const functionCalled = useRef(false);
   const [value, setValue] = useState("");
   const [timer, setTimer] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!functionCalled.current) {
-      invoke("get_last_value", {
-        deviceId,
-        deviceKey,
-        datapointKey: dataPoints[0],
-      })
-        .then((e: any) => {
-          try {
-            let valueJson = JSON.parse(e);
+  const fetchValue = () => {
+    setLoading(true);
+    invoke("get_last_value", {
+      deviceId,
+      deviceKey,
+      datapointKey: dataPoints[0],
+    })
+      .then((e: any) => {
+        try {
+          let valueJson = JSON.parse(e);
 
-            setValue(valueJson.value as string);
+          setValue(valueJson.value as string);
 
-            const oldTime = new Date(valueJson.createdAt).getTime();
-            const newTime = new Date().getTime();
+          const oldTime = new Date(valueJson.createdAt).getTime();
+          const newTime = new Date().getTime();
 
-            const difference = newTime - oldTime;
-            setTimer(difference);
-            setLoading(false);
-
-            setInterval(() => {
-              setTimer((i) => i + 1000);
-            }, 1000);
-          } catch (_error) {
-            setLoading(false);
-          }
-        })
-        .catch((_err) => {
+          const difference = newTime - oldTime;
+          setTimer(difference);
           setLoading(false);
-        });
 
-      listen(`notification---${deviceKey}---${dataPoints[0]}`, (event) => {
+          setInterval(() => {
+            setTimer((i) => i + 1000);
+          }, 1000);
+        } catch (_error) {
+          setLoading(false);
+        }
+      })
+      .catch((_err) => {
+        setLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    emitter.on("refetch", fetchValue);
+
+    fetchValue();
+
+    const unlisten = listen(
+      `notification---${deviceKey}---${dataPoints[0]}`,
+      (event) => {
         setValue(event.payload as string);
         setTimer(0);
-      });
+      }
+    );
 
-      functionCalled.current = true;
-    }
-  }, [deviceId, deviceKey, dataPoints]);
+    return () => {
+      emitter.off("refetch", fetchValue);
+      unlisten.then((f) => f());
+    };
+  }, []);
 
   return (
     <Box width={"100%"}>

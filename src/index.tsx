@@ -4,6 +4,9 @@ import App from "./App";
 import "./style.css";
 import theme from "./theme";
 import { ChakraProvider, ColorModeScript } from "@chakra-ui/react";
+import mitt from "mitt";
+
+export const emitter = mitt();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

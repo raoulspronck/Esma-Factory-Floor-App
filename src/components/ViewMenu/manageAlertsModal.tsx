@@ -53,6 +53,8 @@ const ManageAlertsModal: React.FC<ManageAlertsModalProps> = ({
   const [adding, setAdding] = useState(false);
   const [localAlerts, setLocalAlerts] = useState([...alerts]);
 
+  const [loading, setLoading] = useState(true);
+
   const saveAlerts = async () => {
     setAdding(false);
 
@@ -97,9 +99,11 @@ const ManageAlertsModal: React.FC<ManageAlertsModalProps> = ({
   };
 
   const getDevices = () => {
+    setLoading(true);
     invoke("get_devices")
       .then((e: any) => {
         setDevices(JSON.parse(e));
+        setLoading(false);
       })
       .catch((err) => console.log(err));
   };
@@ -120,8 +124,16 @@ const ManageAlertsModal: React.FC<ManageAlertsModalProps> = ({
   };
 
   useEffect(() => {
-    getDevices();
-  }, []);
+    if (isOpen && device.length === 0) {
+      getDevices();
+    } else if (device.length !== 0) {
+      setLoading(false);
+    }
+
+    return () => {
+      setLoading(true);
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (device === "") {
@@ -192,27 +204,31 @@ const ManageAlertsModal: React.FC<ManageAlertsModalProps> = ({
 
           {adding ? (
             <>
-              <Box mt={[-2, 0, 2]}>
-                <FormControl>
-                  <FormLabel fontSize={["sm", "md", "lg"]}>
-                    Select device
-                  </FormLabel>
+              {loading ? (
+                <Text>Loading devices...</Text>
+              ) : (
+                <Box mt={[-2, 0, 2]}>
+                  <FormControl>
+                    <FormLabel fontSize={["sm", "md", "lg"]}>
+                      Select device
+                    </FormLabel>
 
-                  <Select
-                    size={buttonSize}
-                    ml="auto"
-                    value={device}
-                    onChange={(e) => setDevice(e.target.value)}
-                  >
-                    <option value={""}>Select device</option>
-                    {devices.map((e, key) => (
-                      <option value={e.key} key={key}>
-                        {e.name}
-                      </option>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Box>
+                    <Select
+                      size={buttonSize}
+                      ml="auto"
+                      value={device}
+                      onChange={(e) => setDevice(e.target.value)}
+                    >
+                      <option value={""}>Select device</option>
+                      {devices.map((e, key) => (
+                        <option value={e.key} key={key}>
+                          {e.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Box>
+              )}
               {device === "" ? null : (
                 <Box mt={[-2, 0, 2]}>
                   <FormControl>

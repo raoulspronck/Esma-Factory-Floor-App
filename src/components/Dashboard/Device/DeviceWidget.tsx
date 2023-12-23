@@ -160,7 +160,8 @@ const DeviceWidget: React.FC<DeviceWidgetProps> = ({
         position={"relative"}
       >
         <Text fontSize={"20px"}>{deviceBlock.name}</Text>
-        {connected === null ? null : connected === true ? (
+        {connected === null || connected === undefined ? null : connected ===
+          true ? (
           <Box
             height={"15px"}
             width="15px"

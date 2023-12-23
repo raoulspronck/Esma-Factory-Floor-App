@@ -14,6 +14,7 @@ import { listen } from "@tauri-apps/api/event";
 import React, { useEffect, useRef, useState } from "react";
 import { formatDate } from "../../../../utils/formatDate";
 import { formatNumberValue } from "../../../../utils/formatValue";
+import { emitter } from "../../../../index";
 
 interface ValueWithProgressWidgetProps {
   up: boolean;
@@ -45,7 +46,6 @@ const ValueWithProgressWidget: React.FC<ValueWithProgressWidgetProps> = ({
   deviceKey,
   types,
 }) => {
-  const functionCalled = useRef(false);
   const [value, setValue] = useState({
     value: "",
     time: "",
@@ -54,30 +54,38 @@ const ValueWithProgressWidget: React.FC<ValueWithProgressWidgetProps> = ({
   const [difference, setDifference] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!functionCalled.current && types[0] !== undefined) {
-      invoke("get_last_value", {
-        deviceId,
-        deviceKey,
-        datapointKey: dataPoints[0],
+  const fetchValue = () => {
+    setLoading(true);
+    invoke("get_last_value", {
+      deviceId,
+      deviceKey,
+      datapointKey: dataPoints[0],
+    })
+      .then((e: any) => {
+        try {
+          let valueJson = JSON.parse(e);
+
+          setValue({
+            value: formatNumberValue(valueJson.value, types[0]),
+            time: valueJson.createdAt,
+          });
+        } catch (_error) {}
+
+        setLoading(false);
       })
-        .then((e: any) => {
-          try {
-            let valueJson = JSON.parse(e);
+      .catch((_err) => {
+        setLoading(false);
+      });
+  };
 
-            setValue({
-              value: formatNumberValue(valueJson.value, types[0]),
-              time: valueJson.createdAt,
-            });
-          } catch (_error) {}
+  useEffect(() => {
+    emitter.on("refetch", fetchValue);
 
-          setLoading(false);
-        })
-        .catch((_err) => {
-          setLoading(false);
-        });
+    fetchValue();
 
-      listen(`notification---${deviceKey}---${dataPoints[0]}`, (event) => {
+    const unlisten = listen(
+      `notification---${deviceKey}---${dataPoints[0]}`,
+      (event) => {
         if (prevValue.current !== 0) {
           let diff =
             ((parseFloat(event.payload as string) - prevValue.current) /
@@ -92,11 +100,14 @@ const ValueWithProgressWidget: React.FC<ValueWithProgressWidgetProps> = ({
           value: formatNumberValue(event.payload as string, types[0]),
           time: new Date().toISOString(),
         });
-      });
+      }
+    );
 
-      functionCalled.current = true;
-    }
-  }, [types]);
+    return () => {
+      emitter.off("refetch", fetchValue);
+      unlisten.then((f) => f());
+    };
+  }, []);
 
   return (
     <Box width={"100%"} pr={5} pl={5} maxH="80px" minH={"80px"}>

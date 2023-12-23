@@ -20,6 +20,7 @@ interface SwitchWidgetProps {
   dataPoints: string[];
   types: string[];
   small?: number;
+  name?: string;
 }
 
 const textSizeCalculate = (text: string) => {
@@ -43,16 +44,18 @@ const SwitchWidget: React.FC<SwitchWidgetProps> = ({
   dataPoints,
   types,
   small,
+  name,
 }) => {
   const functionCalled = useRef(false);
   const [value, setValue] = useState({
     value: "",
     time: "",
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!functionCalled.current && types[0] !== undefined) {
+    if (!functionCalled.current) {
+      setLoading(true);
       invoke("get_last_value", {
         deviceId,
         deviceKey,
@@ -80,10 +83,7 @@ const SwitchWidget: React.FC<SwitchWidgetProps> = ({
         }`,
         (event) => {
           setValue({
-            value: formatNumberValue(
-              event.payload as string,
-              small !== undefined ? types[small] : types[0]
-            ),
+            value: event.payload as string,
             time: new Date().toISOString(),
           });
         }
@@ -114,7 +114,11 @@ const SwitchWidget: React.FC<SwitchWidgetProps> = ({
             height={"80px"}
             position={"relative"}
           >
-            <StatLabel fontSize={"13px"}>{dataPoints[small]}</StatLabel>
+            {name && name !== "" ? (
+              <StatLabel fontSize={"13px"}>{name}</StatLabel>
+            ) : (
+              <StatLabel fontSize={"13px"}>{dataPoints[small]}</StatLabel>
+            )}
 
             {loading ? (
               <StatNumber fontSize="20px">Loading...</StatNumber>

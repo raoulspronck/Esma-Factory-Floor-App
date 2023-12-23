@@ -6,19 +6,16 @@ import {
   SliderMark,
   SliderThumb,
   SliderTrack,
-  Spacer,
   Stat,
   StatHelpText,
   StatLabel,
-  StatNumber,
-  Switch,
   Text,
 } from "@chakra-ui/react";
 import { invoke } from "@tauri-apps/api";
 import { listen } from "@tauri-apps/api/event";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { formatDate } from "../../../../utils/formatDate";
-import { formatNumberValue } from "../../../../utils/formatValue";
+import { emitter } from "../../../../index";
 
 interface SliderWidgetProps {
   deviceId: string;
@@ -50,62 +47,18 @@ const SliderWidget: React.FC<SliderWidgetProps> = ({
   types,
   small,
 }) => {
-  const functionCalled = useRef(false);
   const [value, setValue] = useState({
     value: "",
     time: "",
   });
-  const [slider, setSlider] = useState(50);
-  const [loading, setLoading] = useState(true);
+  const [slider, setSlider] = useState(0);
+  const [loading, setLoading] = useState(false);
 
   const labelStyles = {
     mt: "2",
     ml: "-2.5",
     fontSize: ["8px", "10px", "12px"],
   };
-
-  useEffect(() => {
-    if (!functionCalled.current && types[0] !== undefined) {
-      invoke("get_last_value", {
-        deviceId,
-        deviceKey,
-        datapointKey: small !== undefined ? dataPoints[small] : dataPoints[0],
-      })
-        .then((e: any) => {
-          try {
-            let valueJson = JSON.parse(e);
-
-            setValue({
-              value: valueJson.value,
-              time: valueJson.createdAt,
-            });
-            setSlider(parseInt(valueJson.value));
-          } catch (_error) {}
-
-          setLoading(false);
-        })
-        .catch((_err) => {
-          setLoading(false);
-        });
-
-      listen(
-        `notification---${deviceKey}---${
-          small !== undefined ? dataPoints[small] : dataPoints[0]
-        }`,
-        (event) => {
-          setValue({
-            value: formatNumberValue(
-              event.payload as string,
-              small !== undefined ? types[small] : types[0]
-            ),
-            time: new Date().toISOString(),
-          });
-        }
-      );
-
-      functionCalled.current = true;
-    }
-  }, [types]);
 
   const send = (val: number) => {
     invoke("send_message", {
@@ -116,6 +69,57 @@ const SliderWidget: React.FC<SliderWidgetProps> = ({
       .then()
       .catch();
   };
+
+  const fetchValue = () => {
+    setLoading(true);
+    invoke("get_last_value", {
+      deviceId,
+      deviceKey,
+      datapointKey: small !== undefined ? dataPoints[small] : dataPoints[0],
+    })
+      .then((e: any) => {
+        try {
+          let valueJson = JSON.parse(e);
+
+          setValue({
+            value: valueJson.value,
+            time: valueJson.createdAt,
+          });
+          setSlider(parseInt(valueJson.value));
+        } catch (_error) {}
+
+        setLoading(false);
+      })
+      .catch((_err) => {
+        setLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    emitter.on("refetch", fetchValue);
+
+    fetchValue();
+    // Subscribe to the event
+
+    const unlisten = listen(
+      `notification---${deviceKey}---${
+        small !== undefined ? dataPoints[small] : dataPoints[0]
+      }`,
+      (event) => {
+        setValue({
+          value: event.payload as string,
+          time: new Date().toISOString(),
+        });
+        setSlider(parseInt(event.payload as string));
+      }
+    );
+
+    // Clean up the subscription on component unmount
+    return () => {
+      emitter.off("refetch", fetchValue);
+      unlisten.then((f) => f());
+    };
+  }, []);
 
   return (
     <Box width={"100%"} pr={5} pl={5} maxH="80px" minH={"80px"}>

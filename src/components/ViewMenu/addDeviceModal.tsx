@@ -10,6 +10,7 @@ import {
   ModalBody,
   FormControl,
   FormLabel,
+  Text,
   Select,
   ModalFooter,
   Button,
@@ -49,6 +50,7 @@ const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
   const toast = useToast();
   const [devices, setDevices] = useState([]);
   const [device, setDevice] = useState("");
+  const [loading, setLoading] = useState(true);
 
   const saveSettings = async (deviceSelected: any) => {
     return await new Promise((res) =>
@@ -74,16 +76,26 @@ const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
   };
 
   const getDevices = () => {
+    setLoading(true);
     invoke("get_devices")
       .then((e: any) => {
         setDevices(JSON.parse(e));
+        setLoading(false);
       })
       .catch((err) => console.log(err));
   };
 
   useEffect(() => {
-    getDevices();
-  }, []);
+    if (isOpen && device.length === 0) {
+      getDevices();
+    } else if (device.length !== 0) {
+      setLoading(false);
+    }
+
+    return () => {
+      setLoading(true);
+    };
+  }, [isOpen]);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} size={modalSize}>
@@ -94,28 +106,35 @@ const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
         </ModalHeader>
         <ModalCloseButton size={buttonSize} />
         <ModalBody>
-          <Box mt={[-2, 0, 2]}>
-            <FormControl>
-              <FormLabel fontSize={["sm", "md", "lg"]}>Select device</FormLabel>
+          {loading ? (
+            <Text>Loading devices...</Text>
+          ) : (
+            <Box mt={[-2, 0, 2]}>
+              <FormControl>
+                <FormLabel fontSize={["sm", "md", "lg"]}>
+                  Select device
+                </FormLabel>
 
-              <Select
-                size={buttonSize}
-                ml="auto"
-                value={device}
-                onChange={(e) => setDevice(e.target.value)}
-              >
-                {devices
-                  .filter(
-                    (i) => !dashboard.devices.map((e) => e.id).includes(i.id)
-                  )
-                  .map((y, key) => (
-                    <option value={y.id} key={key}>
-                      {y.name}
-                    </option>
-                  ))}
-              </Select>
-            </FormControl>
-          </Box>
+                <Select
+                  size={buttonSize}
+                  ml="auto"
+                  value={device}
+                  onChange={(e) => setDevice(e.target.value)}
+                >
+                  <option value={""}>Select a device or device group</option>
+                  {devices
+                    .filter(
+                      (i) => !dashboard.devices.map((e) => e.id).includes(i.id)
+                    )
+                    .map((y, key) => (
+                      <option value={y.id} key={key}>
+                        {y.name}
+                      </option>
+                    ))}
+                </Select>
+              </FormControl>
+            </Box>
+          )}
         </ModalBody>
 
         <ModalFooter>

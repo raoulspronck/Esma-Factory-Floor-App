@@ -60,8 +60,10 @@ const SerialPortSettingModal: React.FC<SerialPortSettingModalProps> = ({
   const [portsAv, setPortsAv] = useState<string[]>([]);
 
   useEffect(() => {
-    getAllAvailbleComs();
-  }, []);
+    if (isOpen) {
+      getAllAvailbleComs();
+    }
+  }, [isOpen]);
 
   const getAllAvailbleComs = () => {
     invoke("get_all_availble_ports")

@@ -43,6 +43,7 @@ async fn find_and_update_or_insert_item_by_key(
 
     let mut last_value_store_write = last_value_store_mutex.write().await;
     let mut found = false;
+    
 
     for item in &mut last_value_store_write.lastvaluestoreitem {
         if item.key == key_to_find {
@@ -240,16 +241,13 @@ async fn main() {
             "devices": []
         }"#;
 
-
-
-
     // Parse the string of data into serde_json::Value.
     let mut default_dashboard_json: Dashboard = serde_json::from_str(default_dashboard_string).unwrap();
-
 
     let http_client = reqwest::Client::new();
 
     if basic_settings.automatic_load_dashboard == "True" {
+        println!("open default dashboard");
         // Load default dashboard gist
         let response = http_client
             .get("https://gist.githubusercontent.com/raoulspronck/60df74173b8ff477eb5af601f8007f59/raw")
@@ -261,54 +259,90 @@ async fn main() {
 
         match response {
             Ok(res) => {
-                
                 default_dashboard_json = serde_json::from_str(&*res).unwrap();
             }
             Err(_err) => {}
         };
-    }
 
-   
-
-    let file_open = std::fs::read_to_string(
-        &"C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
-    );
-
-    match file_open {
-        Ok(v) => {
-            let res = serde_json::from_str::<Dashboard>(&v);
-
-            match res {
-                Ok(_r) => {
-                    // Always save default dashboard
-                    std::fs::write(
-                        "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
-                        serde_json::to_string_pretty(&default_dashboard_json).unwrap(),
-                    )
-                    .unwrap();
-                }
-                Err(_err) => {
-                    // save file with new settings
-                    // Save the JSON structure into the other file.
-                    std::fs::write(
-                        "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
-                        serde_json::to_string_pretty(&default_dashboard_json).unwrap(),
-                    )
-                    .unwrap();
+        let file_open = std::fs::read_to_string(
+            &"C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
+        );
+    
+        match file_open {
+            Ok(v) => {
+                let res = serde_json::from_str::<Dashboard>(&v);
+    
+                match res {
+                    Ok(_r) => {
+                        // Always save default dashboard
+                        std::fs::write(
+                            "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
+                            serde_json::to_string_pretty(&default_dashboard_json).unwrap(),
+                        )
+                        .unwrap();
+                    }
+                    Err(_err) => {
+                        // save file with new settings
+                        // Save the JSON structure into the other file.
+                        std::fs::write(
+                            "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
+                            serde_json::to_string_pretty(&default_dashboard_json).unwrap(),
+                        )
+                        .unwrap();
+                    }
                 }
             }
+            Err(_e) => {
+                // save file with new settings
+                // Save the JSON structure into the other file.
+                std::fs::write(
+                    "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
+                    serde_json::to_string_pretty(&default_dashboard_json).unwrap(),
+                )
+                .unwrap();
+            }
         }
-        Err(_e) => {
-            // save file with new settings
-            // Save the JSON structure into the other file.
-            std::fs::write(
-                "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
-                serde_json::to_string_pretty(&default_dashboard_json).unwrap(),
-            )
-            .unwrap();
-        }
-    }
+    } else {
+        println!("open current dashboard");
 
+        let file_open = std::fs::read_to_string(
+            &"C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
+        );
+    
+        match file_open {
+            Ok(v) => {
+                let res = serde_json::from_str::<Dashboard>(&v);
+    
+                match res {
+                    Ok(_r) => {
+                        
+                    }
+                    Err(_err) => {
+                        // save file with new settings
+                        // Save the JSON structure into the other file.
+                        std::fs::write(
+                            "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
+                            serde_json::to_string_pretty(&default_dashboard_json).unwrap(),
+                        )
+                        .unwrap();
+                    }
+                }
+            }
+            Err(_e) => {
+                // save file with new settings
+                // Save the JSON structure into the other file.
+                std::fs::write(
+                    "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
+                    serde_json::to_string_pretty(&default_dashboard_json).unwrap(),
+                )
+                .unwrap();
+            }
+        }
+    
+    }
+    
+
+   
     // Some JSON input data as a &str. Maybe this comes from the user.
     let default_settings_string = r#"
         {
@@ -688,8 +722,12 @@ async fn main() {
             write_to_log_file,
             send_message,
             get_basic_settings,
-            save_basic_settings
-            // get_last_value_from_internal_store
+            save_basic_settings,
+            get_own_device,
+            get_quiz,
+            get_question,
+            get_end_answer,
+            post_remove_cache
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -1282,7 +1320,7 @@ async fn get_devices(exalise_settings: State<'_, ExaliseSettings>) -> Result<Str
 
     let client = reqwest::Client::new();
     let response = client
-        .get("https://api.exalise.com/api/getalldevices")
+        .get("https://api.exalise.com/api/getalldevicesanddevicegroups")
         .header("x-api-key", http_key)
         .header("x-api-secret", http_secret)
         .header("x-master-device-key", device_key)
@@ -1301,7 +1339,6 @@ async fn get_devices(exalise_settings: State<'_, ExaliseSettings>) -> Result<Str
 #[tauri::command(async)]
 async fn get_device(
     device_id: String,
-
     exalise_settings: State<'_, ExaliseSettings>,
 ) -> Result<String, bool> {
     let device_key = exalise_settings.mqtt_settings.device_key.clone();
@@ -1311,7 +1348,7 @@ async fn get_device(
     let client = reqwest::Client::new();
     let response = client
         .get(format!(
-            "https://api.exalise.com/api/getdevice/{}",
+            "https://api.exalise.com/api/getdeviceorgroup/{}",
             device_id
         ))
         .header("x-api-key", http_key)
@@ -1330,6 +1367,33 @@ async fn get_device(
 }
 
 #[tauri::command(async)]
+async fn get_own_device(
+    exalise_settings: State<'_, ExaliseSettings>,
+) -> Result<String, bool> {
+    let device_key = exalise_settings.mqtt_settings.device_key.clone();
+    let http_key = exalise_settings.http_settings.http_key.clone();
+    let http_secret = exalise_settings.http_settings.http_secret.clone();
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get("https://api.exalise.com/api/getdeviceorgroup")
+        .header("x-api-key", http_key)
+        .header("x-api-secret", http_secret)
+        .header("x-master-device-key", device_key)
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await;
+
+    match response {
+        Ok(res) => return Ok(res.into()),
+        Err(_err) => return Err(false),
+    }
+}
+
+
+#[tauri::command(async)]
 async fn get_last_value(
     device_id: String,
     device_key: String,
@@ -1338,7 +1402,6 @@ async fn get_last_value(
     last_value_store: State<'_, RwLock<LastValueStore>>,
 ) -> Result<String, String> {
     let last_value_store_mutex = last_value_store.clone();
-
     let key_to_find = format!("{}---{}", device_key, datapoint_key);
     let key_to_find_str = key_to_find.as_str();
 
@@ -1419,6 +1482,118 @@ fn write_to_log_file(data: String) -> bool {
         Err(_e) => return false,
     }
 }
+
+#[tauri::command(async)]
+async fn get_quiz(exalise_settings: State<'_, ExaliseSettings>) -> Result<String, String> {
+    let device_key = exalise_settings.mqtt_settings.device_key.clone();
+    let http_key = exalise_settings.http_settings.http_key.clone();
+    let http_secret = exalise_settings.http_settings.http_secret.clone();
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get("https://api.exalise.com/api/getquiz")
+        .header("x-api-key", http_key)
+        .header("x-api-secret", http_secret)
+        .header("x-master-device-key", device_key)
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await;
+
+    match response {
+        Ok(res) => return Ok(res.into()),
+        Err(_err) => return Err("[]".into()),
+    }
+}
+
+#[tauri::command(async)]
+async fn get_question(quiz_id: String, question_id: String, exalise_settings: State<'_, ExaliseSettings>) -> Result<String, String> {
+    if question_id == "" {
+        // fetch first question
+        let device_key = exalise_settings.mqtt_settings.device_key.clone();
+        let http_key = exalise_settings.http_settings.http_key.clone();
+        let http_secret = exalise_settings.http_settings.http_secret.clone();
+
+        let client = reqwest::Client::new();
+        let response = client
+            .get(format!("https://api.exalise.com/api/getquestion/{}", quiz_id))
+            .header("x-api-key", http_key)
+            .header("x-api-secret", http_secret)
+            .header("x-master-device-key", device_key)
+            .send()
+            .await
+            .unwrap()
+            .text()
+            .await;
+
+        match response {
+            Ok(res) => return Ok(res.into()),
+            Err(_err) => return Err("".into()),
+        }
+    }
+    
+    
+    let device_key = exalise_settings.mqtt_settings.device_key.clone();
+    let http_key = exalise_settings.http_settings.http_key.clone();
+    let http_secret = exalise_settings.http_settings.http_secret.clone();
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("https://api.exalise.com/api/getquestion/{}/{}", quiz_id, question_id))
+        .header("x-api-key", http_key)
+        .header("x-api-secret", http_secret)
+        .header("x-master-device-key", device_key)
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await;
+
+    match response {
+        Ok(res) => return Ok(res.into()),
+        Err(_err) => return Err("".into()),
+    }
+}
+
+#[tauri::command(async)]
+async fn get_end_answer(end_answer_id: String, exalise_settings: State<'_, ExaliseSettings>) -> Result<String, String> {
+    let device_key = exalise_settings.mqtt_settings.device_key.clone();
+    let http_key = exalise_settings.http_settings.http_key.clone();
+    let http_secret = exalise_settings.http_settings.http_secret.clone();
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("https://api.exalise.com/api/getendanswer/{}", end_answer_id))
+        .header("x-api-key", http_key)
+        .header("x-api-secret", http_secret)
+        .header("x-master-device-key", device_key)
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await;
+
+    match response {
+        Ok(res) => return Ok(res.into()),
+        Err(_err) => return Err("".into()),
+    }
+}
+
+#[tauri::command(async)]
+async fn post_remove_cache(
+    last_value_store: State<'_, RwLock<LastValueStore>>,
+) -> Result<String, String> {
+
+    // Acquire a write lock to the LastValueStore
+    let mut data = last_value_store.write().await;
+
+    // Clear the data in LastValueStore
+    data.lastvaluestoreitem.clear();
+
+    Ok("Cache removed successfully".to_string())
+}
+
 
 /* #[tauri::command(async)]
 async fn get_last_value_from_internal_store(

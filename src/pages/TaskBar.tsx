@@ -13,11 +13,18 @@ import {
   MenuButton,
   MenuItem,
   MenuList,
+  Popover,
+  PopoverArrow,
+  PopoverBody,
+  PopoverCloseButton,
+  PopoverContent,
+  PopoverTrigger,
+  Portal,
   Spacer,
   Text,
   useDisclosure,
-  useToast,
 } from "@chakra-ui/react";
+import { TfiReload } from "react-icons/tfi";
 import { invoke } from "@tauri-apps/api";
 import { listen } from "@tauri-apps/api/event";
 import React, { useEffect, useRef, useState } from "react";
@@ -50,11 +57,12 @@ import SerialPortSettingModal from "../components/SettingsMenu/serialPortSetting
 import AddDeviceModal from "../components/ViewMenu/addDeviceModal";
 import ManageAlertsModal from "../components/ViewMenu/manageAlertsModal";
 import { exit } from "@tauri-apps/api/process"; //relaunch
-import { VscChromeClose, VscDebugRestart } from "react-icons/vsc";
-import { BsCheckCircle, BsFillCheckCircleFill } from "react-icons/bs";
+import { VscChromeClose } from "react-icons/vsc";
+import { BsCheckCircle } from "react-icons/bs";
 import { FiAlertCircle } from "react-icons/fi";
 import { formatDate } from "../utils/formatDate";
 import GeneralSettingsModal from "../components/SettingsMenu/generalSettingsModal";
+import { emitter } from "../index";
 interface TaskBarProps {
   login: boolean;
   setlayoutChangable: React.Dispatch<React.SetStateAction<boolean>>;
@@ -798,17 +806,46 @@ const TaskBar: React.FC<TaskBarProps> = ({
         <Spacer />
         <Flex alignItems={"center"} width={"fit-content"} mr={5} color="white">
           <ExaliseLogoBox size={28} />
-          <Text
-            fontSize={"18px"}
-            fontWeight="medium"
-            fontFamily="Helvetica"
-            letterSpacing="widest"
-            style={{ transform: "scale(1, 0.9)" }}
-            ml={2}
-            display={["none", "block"]}
-          >
-            Exalise
-          </Text>
+
+          <Popover>
+            {({ isOpen, onClose }) => (
+              <>
+                <PopoverTrigger>
+                  <Text
+                    fontSize={"18px"}
+                    fontWeight="medium"
+                    fontFamily="Helvetica"
+                    letterSpacing="widest"
+                    style={{ transform: "scale(1, 0.9)" }}
+                    ml={2}
+                    display={["none", "block"]}
+                    cursor={"pointer"}
+                  >
+                    Exalise
+                  </Text>
+                </PopoverTrigger>
+                <Portal>
+                  <PopoverContent width={"fit-content"}>
+                    <PopoverArrow />
+                    <PopoverCloseButton />
+                    <PopoverBody>
+                      <Button
+                        leftIcon={<TfiReload />}
+                        colorScheme="blue"
+                        onClick={async () => {
+                          await invoke("post_remove_cache");
+                          emitter.emit("refetch", true);
+                          onClose();
+                        }}
+                      >
+                        Refetch
+                      </Button>
+                    </PopoverBody>
+                  </PopoverContent>
+                </Portal>
+              </>
+            )}
+          </Popover>
 
           {exaliseStatus === "disconnected" ? (
             <Flex
@@ -849,16 +886,6 @@ const TaskBar: React.FC<TaskBarProps> = ({
             </Flex>
           )}
         </Flex>
-
-        {/* <IconButton
-          colorScheme={"whiteAlpha"}
-          aria-label={"restart app"}
-          icon={<VscDebugRestart />}
-          mr={2}
-          onClick={async () => {
-            await relaunch();
-          }}
-        /> */}
 
         <IconButton
           colorScheme={"red"}

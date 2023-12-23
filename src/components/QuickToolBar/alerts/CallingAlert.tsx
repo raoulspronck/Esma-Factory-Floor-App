@@ -12,6 +12,7 @@ import {
   Button,
   useDisclosure,
 } from "@chakra-ui/react";
+import { invoke } from "@tauri-apps/api";
 import React, { useEffect, useRef, useState } from "react";
 import { GoAlert } from "react-icons/go";
 
@@ -21,80 +22,115 @@ interface CallingAlertProps {
 }
 
 const CallingAlert: React.FC<CallingAlertProps> = ({ isOpen, onClose }) => {
-  const cancelRef = useRef();
-  const [closingTimer, setClosingTimer] = useState(0);
-  const [status, setStatus] = useState("");
+  const [send, setSend] = useState(false);
+  const cancelRef = React.useRef();
+  const [deviceName, setDeviceName] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setClosingTimer((e) => e + 1);
-    }, 1000);
+    if (isOpen && deviceName === "") {
+      invoke("get_own_device")
+        .then((e: any) => {
+          const device = JSON.parse(e);
+          setDeviceName(device.name);
+          setLoading(false);
+        })
+        .catch();
+    } else if (deviceName !== "") {
+      setLoading(false);
+    }
 
     return () => {
-      clearInterval(interval);
-      setClosingTimer(0);
+      setLoading(true);
     };
-  }, []);
+  }, [isOpen]);
 
   return (
     <AlertDialog
       isOpen={isOpen}
       leastDestructiveRef={cancelRef}
-      onClose={onClose}
+      onClose={() => {
+        setSend(false);
+        onClose();
+      }}
     >
       <AlertDialogOverlay>
         <AlertDialogContent>
-          <AlertDialogHeader fontSize="lg" fontWeight="bold">
-            {status === "" ? (
-              <Flex alignItems={"start"}>
-                <Text ml="2" fontSize={"25px"} fontWeight="medium">
-                  John bellen?
-                </Text>
-              </Flex>
-            ) : (
-              <Flex alignItems={"start"}>
-                <Icon as={GoAlert} color="blue.400" fontSize={"35px"} />
+          {loading ? (
+            <>
+              <AlertDialogHeader fontSize="lg" fontWeight="bold">
+                Loading
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <Button
+                  ref={cancelRef}
+                  onClick={() => {
+                    setSend(false);
+                    onClose();
+                  }}
+                >
+                  Sluiten
+                </Button>
+              </AlertDialogFooter>
+            </>
+          ) : (
+            <>
+              <AlertDialogHeader fontSize="lg" fontWeight="bold">
+                {send ? (
+                  <Flex alignItems={"start"}>
+                    <Text ml="2" fontSize={"25px"} fontWeight="medium">
+                      Message sent!
+                    </Text>
+                  </Flex>
+                ) : (
+                  <Flex alignItems={"start"}>
+                    <Icon as={GoAlert} color="blue.400" fontSize={"35px"} />
 
-                <Text ml="2" fontSize={"25px"} fontWeight="medium">
-                  John is gebeld
-                </Text>
-              </Flex>
-            )}
-          </AlertDialogHeader>
+                    <Text ml="2" fontSize={"25px"} fontWeight="medium">
+                      John verwittigen?
+                    </Text>
+                  </Flex>
+                )}
+              </AlertDialogHeader>
 
-          {status === "" ? null : (
-            <AlertDialogBody fontSize={"24px"} bgColor="blue.400" color="white">
-              John heeft nog niet gereageerd ({closingTimer})
-            </AlertDialogBody>
+              <AlertDialogFooter>
+                {send ? null : (
+                  <Button
+                    onClick={() => {
+                      invoke("send_message", {
+                        deviceKey: "b63ab95c-8c42-4ac2-971e-762e1125ec2c",
+                        datapoint: "Bel-john",
+                        value: `John gevraagd aan scherm: ${deviceName}`,
+                      })
+                        .then((e) => {
+                          if (e) {
+                            setSend(true);
+                          }
+                        })
+                        .catch((err) => {
+                          console.log(err);
+                        });
+                    }}
+                    mr={3}
+                    colorScheme="twitter"
+                    bgColor="blue.400"
+                  >
+                    Ja
+                  </Button>
+                )}
+
+                <Button
+                  ref={cancelRef}
+                  onClick={() => {
+                    setSend(false);
+                    onClose();
+                  }}
+                >
+                  Sluiten
+                </Button>
+              </AlertDialogFooter>
+            </>
           )}
-
-          <AlertDialogFooter>
-            {status === "" ? (
-              <Button
-                ref={cancelRef}
-                onClick={() => setStatus(new Date().toISOString())}
-                mr={3}
-                colorScheme="twitter"
-                bgColor="blue.400"
-              >
-                Bellen
-              </Button>
-            ) : (
-              <Button
-                ref={cancelRef}
-                onClick={onClose}
-                mr={3}
-                colorScheme="twitter"
-                bgColor="blue.400"
-              >
-                Opniew bellen
-              </Button>
-            )}
-
-            <Button ref={cancelRef} onClick={onClose}>
-              Sluiten
-            </Button>
-          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialogOverlay>
     </AlertDialog>
