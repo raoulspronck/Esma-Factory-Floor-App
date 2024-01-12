@@ -29,7 +29,7 @@ use tauri::Manager;
 use tauri::State;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
-use tokio::time::Duration;
+use tokio::time::{sleep, Duration};
 
 pub struct MqttClient(Mutex<AsyncClient>);
 
@@ -443,6 +443,7 @@ async fn main() {
     let device_key_clone = device_key_lastwill.clone();
     let device_key_clone_clone = device_key_lastwill.clone();
     let device_key_clone_clone_clone = device_key_lastwill.clone();
+    let device_key_clone_clone_clone_clone = device_key_lastwill.clone();
 
     let http_key = exalise_settings.http_settings.http_key.clone();
     let http_secret = exalise_settings.http_settings.http_secret.clone();
@@ -497,31 +498,45 @@ async fn main() {
         .manage(api_settings)
         .setup(move |app| {
             // Run gesture control binary
-            if basic_settings.gesture_control == "True" {
-                let resource_path = app
-                .path_resolver()
-                .resolve_resource("binarieresources/gesture_recognizer.task")
-                .expect("failed to resolve resource");
+            //if basic_settings.gesture_control == "True" {
+            //}
 
-                let window = app.get_window("main").unwrap();
-                tauri::async_runtime::spawn(async move {
+            let resource_path = app
+            .path_resolver()
+            .resolve_resource("binarieresources/light_control.task")
+            .expect("failed to resolve resource");
+
+            let _window = app.get_window("main").unwrap();
+            let client_clone = client.clone();
+
+            tauri::async_runtime::spawn(async move {
+                loop {
                     let (mut rx, _child) = Command::new_sidecar("main")
-                        .expect("failed to setup `app` sidecar")
-                        .args([format!("{:?}", &resource_path)])
-                        .spawn()
-                        .expect("Failed to spawn packaged node");
+                    .expect("failed to setup `app` sidecar")
+                    .args([format!("{:?}", &resource_path)])
+                    .spawn()
+                    .expect("Failed to spawn packaged node");
 
                     while let Some(event) = rx.recv().await {
                         if let CommandEvent::Stdout(line) = event {
                             let output = line.replace("\r", "").replace("\n", "");
 
-                            window
-                                .emit("gesture", Some(output))
-                                .expect("failed to emit event");
+                            client_clone
+                                    .publish(
+                                        format!("exalise/messages/{}/Light", device_key_clone_clone_clone_clone),
+                                        QoS::AtLeastOnce,
+                                        false,
+                                        output.as_bytes().to_vec(),
+                                    )
+                                    .await
+                                    .unwrap();
                         }
                     }
-                });
-            }
+
+                    // sleep 5 minutes
+                    sleep(Duration::from_secs(60)).await;              }
+            });
+         
             
 
             // Run mqtt logic
