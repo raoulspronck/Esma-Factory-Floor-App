@@ -23,6 +23,10 @@ interface DefaultWidgetProps {
 }
 
 const textSizeCalculate = (text: string) => {
+  if (text === undefined) {
+    return 30;
+  }
+
   if (text.length < 6) {
     return 35;
   } else if (text.length < 11) {
@@ -46,7 +50,6 @@ const DefaultWidget: React.FC<DefaultWidgetProps> = ({
   types,
   small,
 }) => {
-  const functionCalled = useRef(false);
   const [value, setValue] = useState({
     value: "",
     time: "",
