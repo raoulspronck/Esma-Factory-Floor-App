@@ -454,11 +454,12 @@ const TaskBar: React.FC<TaskBarProps> = ({
                     (e) => e === notification_key
                   );
                   setDisplayActiveAlerts(array);
+                  activeAlerts.current = array;
 
                   if (array.length === 0) {
                     onClose();
                   }
-                }, 10000);
+                }, 30000);
               }
             }
           }
