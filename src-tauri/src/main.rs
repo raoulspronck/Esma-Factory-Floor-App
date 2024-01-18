@@ -30,6 +30,7 @@ use tauri::State;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
 use tokio::time::{sleep, Duration};
+use tauri_plugin_autostart::MacosLauncher;
 
 pub struct MqttClient(Mutex<AsyncClient>);
 
@@ -489,6 +490,8 @@ async fn main() {
    
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec!("")) /* arbitrary number of args to pass to your app */))
         .manage(MqttClient(Mutex::new(client_clone)))
         .manage(BearerToken("".into()))
         .manage(RwLock::new(LastValueStore {
@@ -708,7 +711,6 @@ async fn main() {
             );
             Ok(())
         })
-        .plugin(tauri_plugin_store::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
             get_all_availble_ports,
             start_file_receive,

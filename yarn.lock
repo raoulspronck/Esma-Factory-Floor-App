@@ -2841,6 +2841,11 @@
   resolved "https://registry.yarnpkg.com/@tauri-apps/api/-/api-1.5.1.tgz#9074476c4323f71351db624e9711c99277cdfb99"
   integrity sha512-6unsZDOdlXTmauU3NhWhn+Cx0rODV+rvNvTdvolE5Kls5ybA6cqndQENDt1+FS0tF7ozCP66jwWoH6a5h90BrA==
 
+"@tauri-apps/api@2.0.0-alpha.13":
+  version "2.0.0-alpha.13"
+  resolved "https://registry.yarnpkg.com/@tauri-apps/api/-/api-2.0.0-alpha.13.tgz#54a080fe7f61715a817828ab1041813a8b9136e6"
+  integrity sha512-sGgCkFahF3OZAHoGN5Ozt9WK7wJlbVZSgWpPQKNag4nSOX1+Py6VDRTEWriiJHDiV+gg31CWHnNXRy6TFoZmdA==
+
 "@tauri-apps/cli-darwin-arm64@1.5.5":
   version "1.5.5"
   resolved "https://registry.yarnpkg.com/@tauri-apps/cli-darwin-arm64/-/cli-darwin-arm64-1.5.5.tgz#394fbc2920bc84524c8adb0021b1f788495a643f"
@@ -2906,6 +2911,13 @@
     "@tauri-apps/cli-win32-arm64-msvc" "1.5.5"
     "@tauri-apps/cli-win32-ia32-msvc" "1.5.5"
     "@tauri-apps/cli-win32-x64-msvc" "1.5.5"
+
+"@tauri-apps/plugin-autostart@^2.0.0-alpha.5":
+  version "2.0.0-alpha.5"
+  resolved "https://registry.yarnpkg.com/@tauri-apps/plugin-autostart/-/plugin-autostart-2.0.0-alpha.5.tgz#ccd6eed9d9a188e359d469756e8c4cf53b56dd96"
+  integrity sha512-FRB0bMqVViAkYD4499NoIwqXIytil96QL5vu69UBwopGBmsWj1VEseYU/2itRNIHGQvrTSybUTRJue3CfPGjwQ==
+  dependencies:
+    "@tauri-apps/api" "2.0.0-alpha.13"
 
 "@tootallnate/once@1":
   version "1.1.2"
