@@ -1,14 +1,17 @@
-import { Flex, Box, Text, Checkbox, LightMode } from "@chakra-ui/react";
+import { Flex, Box, Text, Checkbox, LightMode, Button } from "@chakra-ui/react";
 import { listen } from "@tauri-apps/api/event";
 import React, { useEffect, useRef, useState } from "react";
 import SerialLine from "../components/serialLine";
 
 interface RS232MonitorProps {
   setError: React.Dispatch<React.SetStateAction<string>>;
+  page: number;
 }
 
-const RS232Monitor: React.FC<RS232MonitorProps> = ({ setError }) => {
+const RS232Monitor: React.FC<RS232MonitorProps> = ({ setError, page }) => {
   const functionCalled = useRef(false);
+  const monitor = useRef(false);
+  const [checkBox2, setCheckBox2] = useState(monitor.current);
   const autoScroll = useRef(true);
   const [checkBox, setCheckBox] = useState(autoScroll.current);
   const endOfDiv = useRef(null);
@@ -25,16 +28,18 @@ const RS232Monitor: React.FC<RS232MonitorProps> = ({ setError }) => {
 
         const json = JSON.parse(event.payload as string);
 
-        setSerialInput((e) => [
-          ...e,
-          {
-            time: new Date().toISOString(),
-            message: json.message,
-            hex: json.decimal,
-          },
-        ]);
+        if (monitor.current) {
+          setSerialInput((e) => [
+            ...e,
+            {
+              time: new Date().toISOString(),
+              message: json.message,
+              hex: json.decimal,
+            },
+          ]);
+        }
 
-        if (endOfDiv.current !== null && autoScroll.current) {
+        if (endOfDiv.current !== null && autoScroll.current && page === 1) {
           endOfDiv.current.scrollIntoView();
         }
       });
@@ -50,15 +55,28 @@ const RS232Monitor: React.FC<RS232MonitorProps> = ({ setError }) => {
         alignItems={"center"}
         color="white"
       >
-        <Text fontSize={"22px"} mr={3} color="gray.800">
-          Direct Rs-232 communicatie
-        </Text>
+        <Flex>
+          <LightMode>
+            <Checkbox
+              isChecked={checkBox2}
+              onChange={(e) => {
+                monitor.current = e.target.checked;
+                setCheckBox2(e.target.checked);
+              }}
+              borderColor="gray.400"
+            ></Checkbox>
+          </LightMode>
+
+          <Text fontSize={"22px"} mr={3} color="gray.800">
+            Direct Rs-232 communicatie
+          </Text>
+        </Flex>
 
         <Box
           mr={[1, 2]}
           ml={[1, 2]}
           height={["60%", "70%", "80%"]}
-          width={"1px"}
+          width={"2px"}
           backgroundColor={"blackAlpha.800"}
         />
 

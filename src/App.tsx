@@ -14,6 +14,7 @@ import styles from "./styles.module.css";
 import useWindowSize from "./utils/useWindowSize";
 
 import { onUpdaterEvent } from "@tauri-apps/api/updater";
+import { listen } from "@tauri-apps/api/event";
 
 function App() {
   const [page, setPage] = useState(0);
@@ -26,6 +27,7 @@ function App() {
     devices: [] as any[],
   });
   const { height } = useWindowSize();
+  const functionCalled = useRef(false);
 
   useEffect(() => {
     onUpdaterEvent(({ error, status }) => {
@@ -33,6 +35,23 @@ function App() {
         data: `${status + " / " + error} \r\n`,
       });
     });
+
+    if (!functionCalled.current) {
+      functionCalled.current = true;
+
+      listen("rs232", (event) => {
+        const json = JSON.parse(event.payload as string);
+        if (json.value) {
+          invoke("send_message", {
+            deviceKey: json.device,
+            datapoint: json.datapoint,
+            value: json.value,
+          })
+            .then()
+            .catch((e) => console.log(e));
+        }
+      });
+    }
   }, []);
 
   return (
@@ -71,7 +90,7 @@ function App() {
               />,
               /*  <PDFViewer />,
               <AllOrders />, */
-              <RS232Monitor setError={setError} />,
+              <RS232Monitor setError={setError} page={page} />,
             ]}
           />
         </div>

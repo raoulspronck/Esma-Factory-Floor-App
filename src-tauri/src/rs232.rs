@@ -4,26 +4,22 @@ use std::fs;
 use std::fs::File;
 use std::io::Read;
 use std::io::{self, Write};
-use tokio::task;
 use tokio::time::{sleep, Duration};
 use tauri::State;
 use tauri::Manager;
-use rumqttc::{AsyncClient, QoS};
-use std::str;
-use serde_json::json;
 
 use crate::main_struct::ExaliseSettings;
 
 pub static CONNECTED_TO_EXALISE: AtomicBool = AtomicBool::new(false);
 
-static MAIN_THREAD_RUNNING: AtomicBool = AtomicBool::new(false);
-static MAIN_THREAD_SWITCH: AtomicBool = AtomicBool::new(false);
+pub static MAIN_THREAD_RUNNING: AtomicBool = AtomicBool::new(false);
+pub static MAIN_THREAD_SWITCH: AtomicBool = AtomicBool::new(false);
 
-static SEND_THREAD_RUNNING: AtomicBool = AtomicBool::new(false);
-static SEND_THREAD_SWITCH: AtomicBool = AtomicBool::new(false);
+pub static SEND_THREAD_RUNNING: AtomicBool = AtomicBool::new(false);
+pub static SEND_THREAD_SWITCH: AtomicBool = AtomicBool::new(false);
 
-static RECEIVE_THREAD_RUNNING: AtomicBool = AtomicBool::new(false);
-static RECEIVE_THREAD_SWITCH: AtomicBool = AtomicBool::new(false);
+pub static RECEIVE_THREAD_RUNNING: AtomicBool = AtomicBool::new(false);
+pub static RECEIVE_THREAD_SWITCH: AtomicBool = AtomicBool::new(false);
 
 
 #[tauri::command(async)]
@@ -54,253 +50,6 @@ pub async fn stop_file_send() -> bool {
     return true;
 }
 
-pub fn automatic_start_rs232(
-    mut port_name: String,
-    mut baud_rate: u32,
-    data_bits_number: u32,
-    parity_string: u32,
-    stop_bits_number: u32,
-    device_key: String,
-    window: tauri::Window,
-    mqtt_client: AsyncClient,
-) {
-    if port_name == "" {
-        port_name = "COM3".to_string();
-    }
-
-    if baud_rate == 0 {
-        baud_rate = 9600;
-    }
-
-    let data_bits;
-
-    match data_bits_number {
-        5 => data_bits = DataBits::Five,
-        6 => data_bits = DataBits::Six,
-        7 => data_bits = DataBits::Seven,
-        8 => data_bits = DataBits::Eight,
-        _ => data_bits = DataBits::Eight,
-    }
-
-    let parity;
-
-    match parity_string {
-        0 => parity = Parity::None,
-        1 => parity = Parity::Odd,
-        2 => parity = Parity::Even,
-        _ => parity = Parity::None,
-    }
-
-    let stop_bits;
-
-    match stop_bits_number {
-        1 => stop_bits = StopBits::One,
-        2 => stop_bits = StopBits::Two,
-        _ => stop_bits = StopBits::One,
-    }
-
-    task::spawn(async move {
-        loop {
-            // if file sending is in progress -> wait
-            while SEND_THREAD_RUNNING.load(Ordering::Relaxed)
-                || RECEIVE_THREAD_RUNNING.load(Ordering::Relaxed)
-                || MAIN_THREAD_SWITCH.load(Ordering::Relaxed)
-            {
-                window
-                .emit("rs232-error", "RS232 Monitoring waiting for file transfer to be completed")
-                .unwrap();
-                sleep(Duration::from_millis(1000)).await;
-            }
-
-            //set main thread running
-            MAIN_THREAD_RUNNING.store(true, Ordering::Relaxed);
-            window.emit("rs232-status", "started").unwrap();
-
-            'main: loop {
-                if MAIN_THREAD_SWITCH.load(Ordering::Relaxed) {
-                    break 'main;
-                }
-                let port = serialport::new(port_name.clone(), baud_rate)
-                    .data_bits(data_bits)
-                    .stop_bits(stop_bits)
-                    .parity(parity)
-                    .timeout(Duration::from_millis(10))
-                    .open();
-
-                match port {
-                    Ok(mut port) => {
-                        window.emit("rs232-error", "").unwrap();
-                        let mut serial_buf: Vec<u8> = vec![0; 1000];
-                        let mut line_buf: Vec<u8> = Vec::new();
-                        let mut buf_size: usize = 0;
-                        let mut read_buf: Vec<u8> = Vec::new();
-                        let mut read_buf_size: usize = 0;
-                        'reading: loop {
-                            if MAIN_THREAD_SWITCH.load(Ordering::Relaxed) {
-                                break 'main;
-                            }
-                            match port.read(serial_buf.as_mut_slice()) {
-                                Ok(t) => {
-                                    for elem in &serial_buf[..t] {
-                                        read_buf.insert(read_buf_size, *elem);
-                                        read_buf_size += 1;
-                                        // enkel charackters invoegen die je kunt lezen
-                                        if *elem > 31 && *elem < 127 {
-                                            line_buf.insert(buf_size, *elem);
-                                            buf_size += 1;
-                                        } else if *elem == 10 {
-                                            match str::from_utf8(&line_buf[..buf_size]) {
-                                                Ok(v) => {
-                                                    // split string
-                                                    let split = v.split("-").collect::<Vec<&str>>();
-                                                    if split.len() == 2
-                                                        && CONNECTED_TO_EXALISE
-                                                            .load(Ordering::Relaxed)
-                                                    {
-                                                        match mqtt_client
-                                                            .publish(
-                                                                format!(
-                                                                    "exalise/messages/{}/{}",
-                                                                    device_key, split[0]
-                                                                ),
-                                                                QoS::AtLeastOnce,
-                                                                false,
-                                                                split[1].as_bytes().to_vec(),
-                                                            )
-                                                            .await
-                                                        {
-                                                            Ok(()) => {
-                                                                let decimal: String = read_buf
-                                                                    [..read_buf_size]
-                                                                    .into_iter()
-                                                                    .map(|i| format!("{i:?} "))
-                                                                    .collect();
-                                                                let data = json!({
-                                                                    "message": v,
-                                                                    "decimal": decimal,
-                                                                });
-                                                                window
-                                                                    .emit("rs232", data.to_string())
-                                                                    .unwrap();
-                                                                line_buf = Vec::new();
-                                                                buf_size = 0;
-                                                                read_buf = Vec::new();
-                                                                read_buf_size = 0;
-                                                            }
-                                                            Err(_e) => {
-                                                                window
-                                                        .emit(
-                                                            "rs232-error",
-                                                            "Failed to send message to Exalise",
-                                                        )
-                                                        .unwrap();
-                                                                let decimal: String = read_buf
-                                                                    [..read_buf_size]
-                                                                    .into_iter()
-                                                                    .map(|i| format!("{i:?} "))
-                                                                    .collect();
-                                                                let data = json!({
-                                                                    "message": v,
-                                                                    "decimal": decimal,
-                                                                });
-                                                                window
-                                                                    .emit("rs232", data.to_string())
-                                                                    .unwrap();
-                                                                line_buf = Vec::new();
-                                                                buf_size = 0;
-                                                                read_buf = Vec::new();
-                                                                read_buf_size = 0;
-                                                            }
-                                                        }
-                                                    } else {
-                                                        let decimal: String = read_buf
-                                                                    [..read_buf_size]
-                                                                    .into_iter()
-                                                                    .map(|i| format!("{i:?} "))
-                                                                    .collect();
-                                                                let data = json!({
-                                                                    "message": v,
-                                                                    "decimal": decimal,
-                                                                });
-                                                        window
-                                                            .emit("rs232", data.to_string())
-                                                            .unwrap();
-                                                        line_buf = Vec::new();
-                                                        buf_size = 0;
-                                                        read_buf = Vec::new();
-                                                        read_buf_size = 0;
-                                                    }
-                                                }
-                                                Err(_e) => {
-                                                    window
-                                                        .emit(
-                                                            "rs232-error",
-                                                            "Failed to read message",
-                                                        )
-                                                        .unwrap();
-                                                    line_buf = Vec::new();
-                                                    buf_size = 0;
-                                                    read_buf = Vec::new();
-                                                    read_buf_size = 0;
-                                                }
-                                            };
-                                        } else if buf_size > 1000 {
-                                            match str::from_utf8(&line_buf[..buf_size]) {
-                                                Ok(v) => {
-                                                    let decimal: String = read_buf[..read_buf_size]
-                                                        .into_iter()
-                                                        .map(|i| format!("{i:?} "))
-                                                        .collect();
-                                                    let data = json!({
-                                                        "message": v,
-                                                        "decimal": decimal,
-                                                    });
-                                                    window.emit("rs232", data.to_string()).unwrap();
-                                                    line_buf = Vec::new();
-                                                    buf_size = 0;
-                                                    read_buf = Vec::new();
-                                                    read_buf_size = 0;
-                                                }
-                                                Err(_e) => {
-                                                    window
-                                                        .emit_all(
-                                                            "rs232-error",
-                                                            "Failed to read message",
-                                                        )
-                                                        .unwrap();
-                                                    line_buf = Vec::new();
-                                                    buf_size = 0;
-                                                    read_buf = Vec::new();
-                                                    read_buf_size = 0;
-                                                }
-                                            };
-                                        }
-                                    }
-                                }
-                                Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
-                                Err(_e) => {
-                                    
-                                    std::thread::sleep(Duration::from_millis(5));
-                                    break 'reading;
-                                }
-                            }
-                        }
-                    }
-                    Err(_e) => {
-                        window
-                            .emit("rs232-error", format!("Failed to open {}", port_name))
-                            .unwrap();
-                        std::thread::sleep(Duration::from_millis(5));
-                    }
-                }
-            }
-
-            //if broken out -> set main thread running false
-            MAIN_THREAD_RUNNING.store(false, Ordering::Relaxed);
-            window.emit("rs232-status", "stopped").unwrap();
-        }
-    });
-}
 
 #[tauri::command(async)]
 pub async fn start_file_receive(
