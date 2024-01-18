@@ -248,7 +248,6 @@ async fn main() {
     let http_client = reqwest::Client::new();
 
     if basic_settings.automatic_load_dashboard == "True" {
-        println!("open default dashboard");
         // Load default dashboard gist
         let response = http_client
             .get("https://gist.githubusercontent.com/raoulspronck/60df74173b8ff477eb5af601f8007f59/raw")
@@ -304,8 +303,6 @@ async fn main() {
             }
         }
     } else {
-        println!("open current dashboard");
-
         let file_open = std::fs::read_to_string(
             &"C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
         );
@@ -549,6 +546,18 @@ async fn main() {
             let app_handler = app.handle();
 
             tauri::async_runtime::spawn(async move {
+                // Start up rs232 communication
+                automatic_start_rs232(
+                    port_name,
+                    baud_rate,
+                    data_bits_number,
+                    parity_string,
+                    stop_bits_number,
+                    device_key_clone_clone,
+                    main_window_2,
+                    client_clone_clone,
+                );
+
                 // receive incoming notifications
                 let mut connected = false;
                 loop {
@@ -558,6 +567,7 @@ async fn main() {
 
                     match notification {
                         Ok(s) => {
+                            //println!("{:?}", s);
                             if !connected {
                                 CONNECTED_TO_EXALISE.store(true, Ordering::Relaxed);
 
@@ -686,6 +696,7 @@ async fn main() {
                             }
                         }
                         Err(_e) => {
+                            // println!("{:?}", e);
                             if connected {
                                 CONNECTED_TO_EXALISE.store(false, Ordering::Relaxed);
                                 main_window
@@ -698,17 +709,7 @@ async fn main() {
                 }
             });
 
-            // Start up rs232 communication
-            automatic_start_rs232(
-                port_name,
-                baud_rate,
-                data_bits_number,
-                parity_string,
-                stop_bits_number,
-                device_key_clone_clone,
-                main_window_2,
-                client_clone_clone,
-            );
+            
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

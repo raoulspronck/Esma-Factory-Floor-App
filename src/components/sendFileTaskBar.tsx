@@ -101,7 +101,9 @@ const SendFileTaskBar: React.FC<SendFileTaskBarProps> = ({
                 <Box
                   ml={[1, 2, 3]}
                   minWidth={`${
-                    fileSendProgress.split("/")[1].length * 6 * 2 + 40
+                    fileSendProgress.split("/")[1]
+                      ? fileSendProgress.split("/")[1].length * 6 * 2 + 40
+                      : 0
                   }px   `}
                 >
                   <Text fontSize={["12px", "12px", "15px"]} fontWeight="medium">
