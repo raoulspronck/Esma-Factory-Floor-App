@@ -174,7 +174,8 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
                   cursor="pointer"
                   onClick={() => {
                     Dialog.open({
-                      //defaultPath: filePath === "" ? undefined : filePath,
+                      defaultPath:
+                        "\\\\ESMA-AD\\Public2\\CNC_PROGRAMMAAS+MEET\\CNC FREES",
                       directory: false,
                       multiple: false,
                       filters: [
@@ -189,12 +190,6 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
                           const pathToFile = e as string;
 
                           setFilePathFile(pathToFile);
-                          /* setFilePath(
-                        pathToFile.substring(
-                          0,
-                          pathToFile.lastIndexOf("\\")
-                        )
-                      ); */
                         }
                       })
                       .catch((e) => console.log("error", e));

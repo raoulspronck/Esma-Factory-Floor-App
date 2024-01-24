@@ -163,6 +163,8 @@ const ReceiveFileModal: React.FC<ReceiveFileModalProps> = ({
                   cursor="pointer"
                   onClick={() => {
                     Dialog.open({
+                      defaultPath:
+                        "\\\\ESMA-AD\\Public2\\CNC_PROGRAMMAAS+MEET\\CNC FREES\\",
                       directory: true,
                       multiple: false,
                     })
