@@ -15,6 +15,7 @@ import useWindowSize from "./utils/useWindowSize";
 
 import { onUpdaterEvent } from "@tauri-apps/api/updater";
 import { listen } from "@tauri-apps/api/event";
+import { enable, isEnabled, disable } from "tauri-plugin-autostart-api";
 
 function App() {
   const [page, setPage] = useState(0);
@@ -29,6 +30,11 @@ function App() {
   const { height } = useWindowSize();
   const functionCalled = useRef(false);
 
+  const enableAutoStart = async () => {
+    await enable();
+    console.log(`registered for autostart? ${await isEnabled()}`);
+  };
+
   useEffect(() => {
     onUpdaterEvent(({ error, status }) => {
       invoke("write_to_log_file", {
@@ -38,6 +44,8 @@ function App() {
 
     if (!functionCalled.current) {
       functionCalled.current = true;
+
+      enableAutoStart();
 
       listen("rs232", (event) => {
         const json = JSON.parse(event.payload as string);

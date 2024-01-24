@@ -1,6 +1,6 @@
 import { Box, Text } from "@chakra-ui/react";
 import { invoke } from "@tauri-apps/api";
-import { listen } from "@tauri-apps/api/event";
+import { UnlistenFn, listen } from "@tauri-apps/api/event";
 import React, { useEffect, useRef, useState } from "react";
 import { emitter } from "../../../../index";
 
@@ -38,6 +38,7 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
   const [value, setValue] = useState("");
   const [timer, setTimer] = useState(0);
   const [loading, setLoading] = useState(true);
+  const alreadyFetched = useRef(false);
 
   const fetchValue = () => {
     setLoading(true);
@@ -72,22 +73,26 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
   };
 
   useEffect(() => {
-    emitter.on("refetch", fetchValue);
+    if (alreadyFetched.current === false) {
+      alreadyFetched.current = true;
 
-    fetchValue();
+      emitter.on("refetch", fetchValue);
 
-    const unlisten = listen(
-      `notification---${deviceKey}---${dataPoints[0]}`,
-      (event) => {
-        setValue(event.payload as string);
-        setTimer(0);
-      }
-    );
+      fetchValue();
 
-    return () => {
-      emitter.off("refetch", fetchValue);
-      unlisten.then((f) => f());
-    };
+      const unlisten = listen(
+        `notification---${deviceKey}---${dataPoints[0]}`,
+        (event) => {
+          setValue(event.payload as string);
+          setTimer(0);
+        }
+      );
+
+      return () => {
+        emitter.off("refetch", fetchValue);
+        unlisten.then((f) => f());
+      };
+    }
   }, []);
 
   return (

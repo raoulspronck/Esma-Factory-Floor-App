@@ -8,7 +8,7 @@ import {
   StatNumber,
 } from "@chakra-ui/react";
 import { invoke } from "@tauri-apps/api";
-import { listen } from "@tauri-apps/api/event";
+import { UnlistenFn, listen } from "@tauri-apps/api/event";
 import React, { useEffect, useRef, useState } from "react";
 import { formatDate } from "../../../../utils/formatDate";
 import { formatNumberValue } from "../../../../utils/formatValue";
@@ -55,6 +55,7 @@ const DefaultWidget: React.FC<DefaultWidgetProps> = ({
     time: "",
   });
   const [loading, setLoading] = useState(true);
+  const alreadyFetched = useRef(false);
 
   const fetchValue = () => {
     setLoading(true);
@@ -84,29 +85,33 @@ const DefaultWidget: React.FC<DefaultWidgetProps> = ({
   };
 
   useEffect(() => {
-    emitter.on("refetch", fetchValue);
+    if (alreadyFetched.current === false) {
+      alreadyFetched.current = true;
 
-    fetchValue();
+      emitter.on("refetch", fetchValue);
 
-    const unlisten = listen(
-      `notification---${deviceKey}---${
-        small !== undefined ? dataPoints[small] : dataPoints[0]
-      }`,
-      (event) => {
-        setValue({
-          value: formatNumberValue(
-            event.payload as string,
-            small !== undefined ? types[small] : types[0]
-          ),
-          time: new Date().toISOString(),
-        });
-      }
-    );
+      fetchValue();
 
-    return () => {
-      emitter.off("refetch", fetchValue);
-      unlisten.then((f) => f());
-    };
+      const unlisten = listen(
+        `notification---${deviceKey}---${
+          small !== undefined ? dataPoints[small] : dataPoints[0]
+        }`,
+        (event) => {
+          setValue({
+            value: formatNumberValue(
+              event.payload as string,
+              small !== undefined ? types[small] : types[0]
+            ),
+            time: new Date().toISOString(),
+          });
+        }
+      );
+
+      return () => {
+        emitter.off("refetch", fetchValue);
+        unlisten.then((f) => f());
+      };
+    }
   }, [types]);
 
   if (small !== undefined) {
