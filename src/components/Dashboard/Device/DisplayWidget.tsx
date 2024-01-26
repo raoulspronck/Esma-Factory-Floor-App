@@ -9,6 +9,7 @@ import ValueWithProgressWidget from "./Widgets/ValueWithProgressWidget";
 import TimePredictionWidget from "./Widgets/TimePredictionWidget";
 import SwitchWidget from "./Widgets/SwitchWidget";
 import SliderWidget from "./Widgets/SliderWidget";
+import CustomInputWidget from "./Widgets/CustomInputWidget";
 
 interface DisplayWidgetProps {
   deviceKey: string;
@@ -226,6 +227,31 @@ const DisplayWidget: React.FC<DisplayWidgetProps> = ({
         <Flex alignItems={"center"}>
           <Box width={"100%"}>
             <SwitchWidget
+              deviceId={deviceId}
+              dataPoints={widget.datapoints}
+              deviceKey={deviceKey}
+              types={type}
+            />
+          </Box>
+
+          {layoutChangable ? (
+            <IconButton
+              icon={<AiOutlineMinusSquare />}
+              aria-label="Delete widget"
+              colorScheme={"blackAlpha"}
+              size="sm"
+              ml="1"
+              onClick={deleteWidget}
+            />
+          ) : null}
+        </Flex>
+      );
+
+    case "Custom input":
+      return (
+        <Flex alignItems={"center"}>
+          <Box width={"100%"}>
+            <CustomInputWidget
               deviceId={deviceId}
               dataPoints={widget.datapoints}
               deviceKey={deviceKey}

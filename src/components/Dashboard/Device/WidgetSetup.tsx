@@ -283,6 +283,31 @@ const WidgetSetup: React.FC<WidgetSetupProps> = ({
         </>
       );
 
+    case "Custom input":
+      return (
+        <Box mt={5}>
+          <FormControl>
+            <FormLabel fontSize={["sm", "md", "lg"]}>
+              Select datapoint
+            </FormLabel>
+
+            <Select
+              size={buttonSize}
+              ml="auto"
+              value={dataPointsSelected[0]}
+              onChange={(e) => setDataPointsSelected((_i) => [e.target.value])}
+            >
+              <option value="">Select datapoint</option>
+              {dataPoints.map((e, key) => (
+                <option value={e.key} key={key}>
+                  {e.key}
+                </option>
+              ))}
+            </Select>
+          </FormControl>
+        </Box>
+      );
+
     case "Timer":
       return (
         <Box mt={5}>

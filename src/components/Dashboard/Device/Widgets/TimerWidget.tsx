@@ -80,18 +80,10 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
 
       fetchValue();
 
-      const unlisten = listen(
-        `notification---${deviceKey}---${dataPoints[0]}`,
-        (event) => {
-          setValue(event.payload as string);
-          setTimer(0);
-        }
-      );
-
-      return () => {
-        emitter.off("refetch", fetchValue);
-        unlisten.then((f) => f());
-      };
+      listen(`notification---${deviceKey}---${dataPoints[0]}`, (event) => {
+        setValue(event.payload as string);
+        setTimer(0);
+      });
     }
   }, []);
 
@@ -103,11 +95,17 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
         textAlign="right"
         color="white"
         backgroundColor={
-          value.toLowerCase() === "run" ? "green.400" : "red.400"
+          loading
+            ? "gray.500"
+            : value.toLowerCase() === "run"
+            ? "green.400"
+            : "red.400"
         }
         pr="10px"
       >
-        <Text fontSize={"40px"}>{convertSecondsToHhMmSs({ time: timer })}</Text>
+        <Text fontSize={"40px"}>
+          {loading ? null : convertSecondsToHhMmSs({ time: timer })}
+        </Text>
         <Text fontSize={"30px"} mt={"-10px"}>
           {loading ? "Loading..." : value !== "" ? value : "No data"}
         </Text>

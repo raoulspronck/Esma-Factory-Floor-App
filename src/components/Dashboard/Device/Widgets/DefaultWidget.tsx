@@ -85,42 +85,31 @@ const DefaultWidget: React.FC<DefaultWidgetProps> = ({
   };
 
   useEffect(() => {
-    if (alreadyFetched.current === false) {
-      alreadyFetched.current = true;
+    if (
+      small !== undefined ? types[small] !== undefined : types[0] !== undefined
+    ) {
+      if (alreadyFetched.current === false) {
+        alreadyFetched.current = true;
 
-      emitter.on("refetch", fetchValue);
+        emitter.on("refetch", fetchValue);
 
-      fetchValue();
+        fetchValue();
 
-      const unlisten = listen(
-        `notification---${deviceKey}---${
-          small !== undefined ? dataPoints[small] : dataPoints[0]
-        }`,
-        (event) => {
-          setValue({
-            value: formatNumberValue(
-              event.payload as string,
-              small !== undefined ? types[small] : types[0]
-            ),
-            time: new Date().toISOString(),
-          });
-        }
-      );
-
-      return () => {
-        emitter.off("refetch", fetchValue);
-        unlisten.then((f) => f());
-      };
-    } else {
-      setValue((e) => {
-        return {
-          value: formatNumberValue(
-            e.value,
-            small !== undefined ? types[small] : types[0]
-          ),
-          time: e.time,
-        };
-      });
+        listen(
+          `notification---${deviceKey}---${
+            small !== undefined ? dataPoints[small] : dataPoints[0]
+          }`,
+          (event) => {
+            setValue({
+              value: formatNumberValue(
+                event.payload as string,
+                small !== undefined ? types[small] : types[0]
+              ),
+              time: new Date().toISOString(),
+            });
+          }
+        );
+      }
     }
   }, [types]);
 

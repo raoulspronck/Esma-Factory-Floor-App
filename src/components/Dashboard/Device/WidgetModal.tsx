@@ -25,6 +25,8 @@ import { v4 } from "uuid";
 import CircularProgressWidget from "./WidgetExample/circularProgressWidget";
 import TimerWidget from "./WidgetExample/TimerWidget";
 import WidgetSetup from "./WidgetSetup";
+import CustomInputWidget from "./Widgets/CustomInputWidget";
+import CustomInputExampleWidget from "./WidgetExample/CustomInputExampleWidget";
 
 interface WidgetModalProps {
   isOpen: boolean;
@@ -255,6 +257,11 @@ const WidgetModal: React.FC<WidgetModalProps> = ({
               <Radio value="Timer">
                 <Box width={"370px"}>
                   <TimerWidget />
+                </Box>
+              </Radio>
+              <Radio value="Custom input" mt={5}>
+                <Box width={"370px"}>
+                  <CustomInputExampleWidget />
                 </Box>
               </Radio>
             </RadioGroup>

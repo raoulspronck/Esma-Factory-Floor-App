@@ -639,6 +639,7 @@ async fn main() {
                                         )
                                         .await;
                                     } else {
+
                                         // remove key from topic
                                         let datapoint_key_split = vec_topic[3].split("_");
 
@@ -675,7 +676,10 @@ async fn main() {
 
                                         let s: String =
                                             format!("notification---{}", key_to_find).to_owned();
+
+
                                         let s_slice: &str = &s[..];
+                                    
 
                                         main_window.emit(s_slice, format!("{}", payload)).unwrap();
 
@@ -977,8 +981,6 @@ async fn send_message(
     value: String,
     mqtt_client: State<'_, MqttClient>,
 ) -> Result<bool, bool> {
-    println!("Sending message...");
-
     let client = mqtt_client.0.lock().await;
 
     match client
@@ -991,15 +993,9 @@ async fn send_message(
         .await
     {
         Ok(_ok) => {
-            println!(
-                "succes {}   ----   {}",
-                format!("exalise/messages/{}/{}", device_key, datapoint),
-                value
-            );
             return Ok(true);
         }
-        Err(err) => {
-            println!("{:?}", err);
+        Err(_err) => {
             return Err(false);
         }
     }
