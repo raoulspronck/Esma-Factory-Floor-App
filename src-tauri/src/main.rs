@@ -32,6 +32,7 @@ use tokio::sync::Mutex;
 use tokio::sync::RwLock;
 use tokio::time::{sleep, Duration};
 use tauri_plugin_autostart::MacosLauncher;
+use chrono::prelude::*;
 
 pub struct MqttClient(Mutex<AsyncClient>);
 
@@ -566,9 +567,11 @@ async fn main() {
 
                     let notification = eventloop.poll().await;
 
+                    let time: String = Local::now().to_string();
+                    
                     match notification {
                         Ok(s) => {
-                            println!("{:?}", s);
+                            main_window.emit("exalise-connection-status", format!("{} - {:?}", time, s)).unwrap();
                             if !connected {
                                 CONNECTED_TO_EXALISE.store(true, Ordering::Relaxed);
 
@@ -696,8 +699,8 @@ async fn main() {
                                 }
                             }
                         }
-                        Err(_e) => {
-                            // println!("{:?}", e);
+                        Err(e) => {
+                            main_window.emit("exalise-connection-status", format!("{:?}", e)).unwrap();
                             if connected {
                                 CONNECTED_TO_EXALISE.store(false, Ordering::Relaxed);
                                 main_window

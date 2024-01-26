@@ -111,6 +111,16 @@ const DefaultWidget: React.FC<DefaultWidgetProps> = ({
         emitter.off("refetch", fetchValue);
         unlisten.then((f) => f());
       };
+    } else {
+      setValue((e) => {
+        return {
+          value: formatNumberValue(
+            e.value,
+            small !== undefined ? types[small] : types[0]
+          ),
+          time: e.time,
+        };
+      });
     }
   }, [types]);
 

@@ -100,9 +100,8 @@ const TaskBar: React.FC<TaskBarProps> = ({
   const { isOpen, onOpen, onClose } = useDisclosure();
   const cancelRef = useRef();
 
-  // Timer
-  const [closingTimer, setClosingTimer] = useState(10);
-  const timingIntervalLive = useRef(null);
+  // connect-error text
+  const [connectionErrorText, setConnectionErrorText] = useState([]);
 
   // All the allerts it wants to subscribes
   const [alerts, setAlerts] = useState([]);
@@ -281,6 +280,16 @@ const TaskBar: React.FC<TaskBarProps> = ({
   useEffect(() => {
     if (!functionCalled.current) {
       functionCalled.current = true;
+
+      listen("exalise-connection-status", (event) => {
+        const connection_error = event.payload as string;
+        let total_text = connectionErrorText;
+        total_text.push(`${connection_error}\r\n`);
+        if (total_text.length > 50) {
+          total_text.shift();
+        }
+        setConnectionErrorText(total_text);
+      });
 
       listen("rs232-error", (event) => {
         setError(event.payload as string);
@@ -751,7 +760,11 @@ const TaskBar: React.FC<TaskBarProps> = ({
                   </Flex>
                 </MenuItem>
 
-                <ErrorLog isOpen={isOpenErrorLog} onClose={onCloseErrorLog} />
+                <ErrorLog
+                  isOpen={isOpenErrorLog}
+                  onClose={onCloseErrorLog}
+                  connectionErrorText={connectionErrorText}
+                />
               </MenuList>
             </Menu>
 
