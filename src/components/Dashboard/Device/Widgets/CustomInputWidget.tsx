@@ -132,6 +132,7 @@ const CustomInputWidget: React.FC<CustomInputWidgetProps> = ({
       minH={"80px"}
       flexDir={"column"}
       justifyContent={"center"}
+      pt={3}
     >
       <Stat>
         <Flex alignItems={"center"}>
