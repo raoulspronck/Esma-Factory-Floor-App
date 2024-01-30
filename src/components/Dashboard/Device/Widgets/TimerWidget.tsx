@@ -97,8 +97,11 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
         backgroundColor={
           loading
             ? "gray.500"
-            : value.toLowerCase() === "run"
+            : value.toLowerCase() === "run" ||
+              value.toLowerCase() === "herstart"
             ? "green.400"
+            : value.toLowerCase() === "pauze"
+            ? "orange.400"
             : "red.400"
         }
         pr="10px"

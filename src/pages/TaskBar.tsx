@@ -28,6 +28,7 @@ import { TfiReload } from "react-icons/tfi";
 import { invoke } from "@tauri-apps/api";
 import { listen } from "@tauri-apps/api/event";
 import React, { useEffect, useRef, useState } from "react";
+import { relaunch } from "@tauri-apps/api/process";
 import {
   AiOutlineApi,
   AiOutlineCloudUpload,
@@ -334,6 +335,9 @@ const TaskBar: React.FC<TaskBarProps> = ({
       setPingTime(0);
       setInterval(() => {
         setPingTime((e) => e - 1);
+        if (pingTime > 20) {
+          relaunch();
+        }
       }, 1000);
     }
   }, []);
