@@ -175,9 +175,7 @@ export const makeTimePrediction = (initialTime: number) => {
   }
 
   const value = predictTimeAndDayFromNow(initialTime);
-  return `${getDateWithoutWeekends(value.day)}' ${value.hours}:${
-    value.minutes
-  }`;
+  return `${getDateWithoutWeekends(value.day)} ${value.hours}:${value.minutes}`;
 };
 
 function getDateWithoutWeekends(daysFromNow: number) {
