@@ -175,10 +175,36 @@ export const makeTimePrediction = (initialTime: number) => {
   }
 
   const value = predictTimeAndDayFromNow(initialTime);
-  const date = new Date(new Date().getTime() + value.day * 24 * 60 * 60 * 1000);
-
-  return `${date.getDay()}/${date.getMonth() + 1}/${date
-    .getFullYear()
-    .toString()
-    .slice(2, 4)}' ${value.hours}:${value.minutes}`;
+  return `${getDateWithoutWeekends(value.day)}' ${value.hours}:${
+    value.minutes
+  }`;
 };
+
+function getDateWithoutWeekends(daysFromNow: number) {
+  const today = new Date();
+  let futureDate = new Date(today);
+
+  // Function to check if a given date is a weekend (Saturday or Sunday)
+  const isWeekend = (date: Date) => {
+    const day = date.getDay();
+    return day === 0 || day === 6;
+  };
+
+  // Loop through the days and skip weekends
+  while (daysFromNow > 0) {
+    futureDate.setDate(futureDate.getDate() + 1);
+
+    if (!isWeekend(futureDate)) {
+      daysFromNow--;
+    }
+  }
+
+  const day = futureDate.getDate();
+  const month = futureDate.getMonth() + 1; // Adding 1 since months are zero-based
+  const year = futureDate.getFullYear();
+
+  // Formatting the output as "day/month/year"
+  const formattedDate = `${day}/${month}/${year % 100}'`; // Using % 100 to get the last two digits of the year
+
+  return formattedDate;
+}
