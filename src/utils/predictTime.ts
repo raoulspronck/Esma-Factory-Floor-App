@@ -170,7 +170,9 @@ const predictTimeAndDayFromNow = (
 };
 
 export const makeTimePrediction = (initialTime: number) => {
-  if (!initialTime) return "No data";
+  if (!initialTime) {
+    return "No data";
+  }
 
   const value = predictTimeAndDayFromNow(initialTime);
   const date = new Date(new Date().getTime() + value.day * 24 * 60 * 60 * 1000);

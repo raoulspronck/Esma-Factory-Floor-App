@@ -2,6 +2,7 @@ import {
   AlertDialog,
   AlertDialogBody,
   AlertDialogContent,
+  Box,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogOverlay,
@@ -335,9 +336,6 @@ const TaskBar: React.FC<TaskBarProps> = ({
       setPingTime(0);
       setInterval(() => {
         setPingTime((e) => e - 1);
-        if (pingTime > 20) {
-          relaunch();
-        }
       }, 1000);
     }
   }, []);
@@ -487,6 +485,12 @@ const TaskBar: React.FC<TaskBarProps> = ({
       }
     }
   }, [alerts]);
+
+  useEffect(() => {
+    if (pingTime < -20) {
+      relaunch();
+    }
+  }, [pingTime]);
 
   return (
     <>
@@ -847,17 +851,29 @@ const TaskBar: React.FC<TaskBarProps> = ({
                     <PopoverArrow />
                     <PopoverCloseButton />
                     <PopoverBody>
-                      <Button
-                        leftIcon={<TfiReload />}
-                        colorScheme="blue"
-                        onClick={async () => {
-                          await invoke("post_remove_cache");
-                          emitter.emit("refetch", true);
-                          onClose();
-                        }}
-                      >
-                        Refetch
-                      </Button>
+                      <Flex flexDir={"column"}>
+                        <Button
+                          leftIcon={<TfiReload />}
+                          colorScheme="blue"
+                          onClick={async () => {
+                            await invoke("post_remove_cache");
+                            emitter.emit("refetch", true);
+                            onClose();
+                          }}
+                        >
+                          Refetch
+                        </Button>
+                        <Button
+                          mt={2}
+                          leftIcon={<TfiReload />}
+                          colorScheme="orange"
+                          onClick={async () => {
+                            await relaunch();
+                          }}
+                        >
+                          Relaunch
+                        </Button>
+                      </Flex>
                     </PopoverBody>
                   </PopoverContent>
                 </Portal>
