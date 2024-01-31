@@ -40,7 +40,7 @@ export const formatNumberValue = (value: string, type: string) => {
       return formatTime(parseInt(value));
 
     case "TimePrediction":
-      return formatSmallDate(makeTimePrediction(parseInt(value)).toISOString());
+      return makeTimePrediction(parseInt(value)).toString();
 
     case "Images":
       return formatImageValue(value);

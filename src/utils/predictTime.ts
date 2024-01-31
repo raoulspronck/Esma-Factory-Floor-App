@@ -1,112 +1,182 @@
-export const makeTimePrediction = (time: number) => {
-  // 7 - 10 = 3 uur = 10.800.000ms
-  // 10:20 - 12:30 = 2 uur 10 = 7.800.000ms
-  // 13:05 - 15:45 = 2 uur 40 = 9.600.000ms
-  // 1 werk dag = 28200000
-  const now = new Date().getTime();
+import { GrReturn } from "react-icons/gr";
 
-  const einde = new Date().setUTCHours(13, 45, 0, 0);
+// return time
+const predictTimeAndDayFromNow = (
+  initialTime: number
+): {
+  hours: number;
+  minutes: number;
+  day: number;
+} => {
+  // predicts when machine is finished base on office hours
 
-  const middagPauze = new Date().setUTCHours(10, 30, 0, 0);
-  const middagPauzeEinde = new Date().setUTCHours(11, 5, 0, 0);
+  // start
+  const work_start = 6.92;
+  const work_stop = 15.75;
 
-  const eerstePauze = new Date().setUTCHours(8, 0, 0, 0);
-  const eerstePauzeEinde = new Date().setUTCHours(8, 20, 0, 0);
+  // Pauze 1
+  const pauze1_start = 10;
+  const pauze1_stop = 10.42;
+
+  // Pauze 2
+  const pauze2_start = 12.5;
+  const pauze2_stop = 13.08;
+
+  // working periodes
+  const work_periode1 = pauze1_start - work_start;
+  const work_periode2 = pauze2_start - pauze1_stop;
+  const work_periode3 = work_stop - pauze2_stop;
+
+  let total_work_periode = work_periode1 + work_periode2 + work_periode3;
+  let half_work_periode = work_periode1 + work_periode2;
+  let half_end_work_periode = work_periode2 + work_periode3;
+
+  // Nu
+  const nowDate = new Date();
+  const now = nowDate.getHours() + nowDate.getMinutes() / 60;
+
+  // Time to complete the order in hours,minutes
+  const machinetime = initialTime / 1000 / 60 / 60;
+  const machinetime_hours = Math.floor(machinetime);
+  const machinetime_minutes = Math.round(
+    (machinetime - machinetime_hours) * 60
+  );
+  let machinetime_total = machinetime_hours + machinetime_minutes / 60;
 
   let predictionDay = 0;
 
-  // ls we voor de eerste pauze zitten
-  if (now < eerstePauze) {
-    if (now + time < eerstePauze) {
+  // als we voor de eerste pauze zitten
+  if (now < pauze1_start) {
+    // Nu is het voor de pauze
+    if (now + machinetime_total < pauze1_start) {
       // voor de eerste pauze klaar
-      return new Date(now + time);
+      const time = now + machinetime_total;
+      const hours = Math.floor(time);
+      return {
+        hours,
+        minutes: Math.round((time - hours) * 60),
+        day: 0,
+      };
     } else {
-      time = time - (eerstePauze - now);
-      // We zitten na de eerste pauze we hebben nog 18600000ms te gaan
-      if (time > 18600000) {
-        time = time - 18600000;
-      } else if (time > 7800000) {
-        // voor het einde van de dag klaar
-
-        return new Date(middagPauzeEinde + (time - 7800000));
+      machinetime_total = machinetime_total - (pauze1_start - now);
+      if (machinetime_total > half_end_work_periode) {
+        // we zijn vandaag niet klaar
+        machinetime_total = machinetime_total - half_end_work_periode;
+      } else if (machinetime_total > work_periode2) {
+        // we zijn in workperiode 3 klaar
+        const time = pauze2_stop + (machinetime_total - work_periode2);
+        const hours = Math.floor(time);
+        return {
+          hours,
+          minutes: Math.round((time - hours) * 60),
+          day: 0,
+        };
       } else {
-        // voor de middag pauze klaar
-        return new Date(eerstePauzeEinde + time);
+        // we zijn voor de middag pauze klaar
+        const time = pauze1_stop + machinetime_total;
+        const hours = Math.floor(time);
+        return {
+          hours,
+          minutes: Math.round((time - hours) * 60),
+          day: 0,
+        };
       }
     }
-  } else if (now < middagPauze) {
+  } else if (now < pauze2_start) {
     // als we voor de middag pauze zitten
-    if (now + time < middagPauze) {
-      // voor de middag pauze klaar
-      return new Date(now + time);
-    } else {
-      time = time - (middagPauze - now);
+    if (now + machinetime_total < pauze2_start) {
+      // we zijn voor de middag pauze klaar
 
-      // We zitten na de middag pauze we hebben nog 9600000ms te gaan
-      if (time > 9600000) {
-        time = time - 9600000;
+      const time = now + machinetime_total;
+      const hours = Math.floor(time);
+      return {
+        hours,
+        minutes: Math.round((time - hours) * 60),
+        day: 0,
+      };
+    } else {
+      machinetime_total = machinetime_total - (pauze2_start - now);
+
+      // We zitten na de middag pauze we hebben nog 3 te gaan
+      if (machinetime_total > work_periode3) {
+        // we zijn vandaag niet klaar
+        machinetime_total = machinetime_total - work_periode3;
       } else {
         // voor het einde van de dag klaar
-        return new Date(middagPauzeEinde + time);
+        const time = pauze2_stop + machinetime_total;
+        const hours = Math.floor(time);
+        return {
+          hours,
+          minutes: Math.round((time - hours) * 60),
+          day: 0,
+        };
       }
     }
-  } else if (now < einde) {
+  } else if (now < work_stop) {
     // als we voor het einde zitten
-    if (now + time < einde) {
+    if (now + machinetime_total < work_stop) {
       // voor het einde klaar
-      return new Date(now + time);
+      const time = now + machinetime_total;
+      const hours = Math.floor(time);
+      return {
+        hours,
+        minutes: Math.round((time - hours) * 60),
+        day: 0,
+      };
     } else {
-      time = time - (einde - now);
+      // niet optijd klaar
+      machinetime_total = machinetime_total - (work_stop - now);
     }
   }
 
   // prediction = volgende dag om 00:00:00
   // Add one day to the current date
+  predictionDay = 1;
 
-  // Create a Date object for the current date
-  const currentDate = new Date();
-
-  // Add one day to the current date
-  currentDate.setDate(currentDate.getDate() + 1);
-
-  // Set the time components to the beginning of the day
-  currentDate.setUTCHours(0, 0, 0, 0);
-
-  let prediction = currentDate.getTime();
-
-  // Tijd begint op dag X time frame 0
+  // Tijd begint op dag predictionDay time frame prediction
   while (true) {
-    if (time > 28200000) {
-      time = time - 28200000;
+    if (machinetime_total > total_work_periode) {
+      machinetime_total = machinetime_total - total_work_periode;
       predictionDay += 1;
-    } else if (time > 18600000) {
+    } else if (machinetime_total > half_work_periode) {
       // eindigd ergens in dag x time frame 2
-
-      // plus aantal dagen
-      prediction += predictionDay * 86400000;
-      // plus einde middag pauze 11h5min = 39900000
-      prediction += 39900000;
-      // plus hoeveel er nog gewerkt moet worden na de middag pauze
-      prediction += time - 18600000;
-      return new Date(prediction);
-    } else if (time > 10800000) {
+      const time = pauze2_stop + (machinetime_total - half_work_periode);
+      const hours = Math.floor(time);
+      return {
+        hours,
+        minutes: Math.round((time - hours) * 60),
+        day: predictionDay,
+      };
+    } else if (machinetime_total > work_periode1) {
       // eindigd ergens in dag x time frame 1
-      // plus aantal dagen
-      prediction += predictionDay * 86400000;
-      // plus einde eerste pauze 8h20min = 30000000
-      prediction += 30000000;
-      // plus hoeveel er nog gewerkt moet worden na de eerste pauze
-      prediction += time - 10800000;
-      return new Date(prediction);
+      const time = pauze1_stop + (machinetime_total - work_periode1);
+      const hours = Math.floor(time);
+      return {
+        hours,
+        minutes: Math.round((time - hours) * 60),
+        day: predictionDay,
+      };
     } else {
       // eindigd ergens in dag x time frame 0
-      // plus aantal dagen
-      prediction += predictionDay * 86400000;
-      // plus start dag 4h55min = 17700000
-      prediction += 17700000;
-      // plus hoeveel er nog gewerkt moet worden na de eerste pauze
-      prediction += time;
-      return new Date(prediction);
+      const time = work_start + machinetime_total;
+      const hours = Math.floor(time);
+      return {
+        hours,
+        minutes: Math.round((time - hours) * 60),
+        day: predictionDay,
+      };
     }
   }
+};
+
+export const makeTimePrediction = (initialTime: number) => {
+  if (!initialTime) return "No data";
+
+  const value = predictTimeAndDayFromNow(initialTime);
+  const date = new Date(new Date().getTime() + value.day * 24 * 60 * 60 * 1000);
+
+  return `${date.getDay()}/${date.getMonth() + 1}/${date
+    .getFullYear()
+    .toString()
+    .slice(2, 4)}' ${value.hours}:${value.minutes}`;
 };
