@@ -6,7 +6,7 @@
 mod main_struct;
 mod rs232;
 
-use crate::main_struct::{
+use crate::main_struct::{ 
     Alert, Alerts, ApiSettings, Dashboard, Debiteur, Device, ExaliseHttpSettings,
     ExaliseMqttSettings, ExaliseSettings, LastValueStore, LastValueStoreItem, Layout, LoginData,
     RS232Settings, BasicSettings
@@ -15,6 +15,8 @@ use crate::rs232::{
    start_file_receive, start_file_send, stop_file_receive, stop_file_send,
     CONNECTED_TO_EXALISE,
 };
+
+
 
 use rs232::{MAIN_THREAD_SWITCH, RECEIVE_THREAD_RUNNING, SEND_THREAD_RUNNING, MAIN_THREAD_RUNNING};
 use rumqttc::{AsyncClient, ConnAck, ConnectReturnCode, Event, LastWill, MqttOptions, Packet, QoS};
@@ -37,6 +39,8 @@ use chrono::prelude::*;
 pub struct MqttClient(Mutex<AsyncClient>);
 
 pub struct BearerToken(String);
+
+
 
 async fn find_and_update_or_insert_item_by_key(
     last_value_store_mutex: State<'_, RwLock<LastValueStore>>,
@@ -488,6 +492,9 @@ async fn main() {
    
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+            println!("{}, {argv:?}, {cwd}", app.package_info().name);
+        }))
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec!("")) /* arbitrary number of args to pass to your app */))
         .manage(MqttClient(Mutex::new(client_clone)))
