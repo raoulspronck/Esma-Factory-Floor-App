@@ -123,6 +123,7 @@ const WidgetSetup: React.FC<WidgetSetupProps> = ({
                   <Radio value="Time prediction">Time prediction</Radio>
                 </Stack>
                 <Stack direction="row">
+                  <Radio value="DateTime">DateTime</Radio>
                   <Radio value="Button">Button</Radio>
                   <Radio value="Switch">Switch</Radio>
                   <Radio value="Slider">Slider</Radio>
@@ -350,6 +351,7 @@ const WidgetSetup: React.FC<WidgetSetupProps> = ({
                   <Radio value="Time prediction">Time prediction</Radio>
                 </Stack>
                 <Stack direction="row">
+                  <Radio value="DateTime">DateTime</Radio>
                   <Radio value="Button">Button</Radio>
                   <Radio value="Switch">Switch</Radio>
                   <Radio value="Slider">Slider</Radio>

@@ -13,6 +13,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { formatDate } from "../../../../utils/formatDate";
 import { formatNumberValue } from "../../../../utils/formatValue";
 import { emitter } from "../../../../index";
+import { formatedDateTime } from "../../../../utils/formatedDateTime";
 
 interface DefaultWidgetProps {
   deviceId: string;
@@ -21,6 +22,16 @@ interface DefaultWidgetProps {
   types: string[];
   small?: number;
 }
+
+const formatValue = (value: string, type: string) => {
+  switch (type) {
+    case "DateTime":
+      return formatedDateTime(parseInt(value), "Europe/Brussels");
+
+    default:
+      return value;
+  }
+};
 
 const textSizeCalculate = (text: string) => {
   if (text === undefined) {
@@ -137,7 +148,7 @@ const DefaultWidget: React.FC<DefaultWidgetProps> = ({
                 whiteSpace={"break-spaces"}
                 mt={-1}
               >
-                {value.value}
+                {formatValue(value.value, types[small])}
               </StatNumber>
             ) : (
               <StatNumber fontSize="20px">No data</StatNumber>
@@ -168,7 +179,7 @@ const DefaultWidget: React.FC<DefaultWidgetProps> = ({
                 wordBreak={"break-word"}
                 whiteSpace={"break-spaces"}
               >
-                {value.value}
+                {formatValue(value.value, types[0])}
               </StatNumber>
             ) : (
               <StatNumber fontSize="30px">No data</StatNumber>

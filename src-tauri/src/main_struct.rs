@@ -60,6 +60,12 @@ pub struct Layout {
 }
 
 #[derive(Deserialize, Serialize, Debug)]
+pub struct ValueReponse {
+    pub id_key: String,
+    pub value: String
+}
+
+#[derive(Deserialize, Serialize, Debug)]
 pub struct Device {
     pub id: String,
     pub name: String,

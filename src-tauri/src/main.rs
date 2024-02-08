@@ -9,7 +9,7 @@ mod rs232;
 use crate::main_struct::{ 
     Alert, Alerts, ApiSettings, Dashboard, Debiteur, Device, ExaliseHttpSettings,
     ExaliseMqttSettings, ExaliseSettings, LastValueStore, LastValueStoreItem, Layout, LoginData,
-    RS232Settings, BasicSettings
+    RS232Settings, BasicSettings, ValueReponse
 };
 use crate::rs232::{
    start_file_receive, start_file_send, stop_file_receive, stop_file_send,
@@ -40,35 +40,69 @@ pub struct MqttClient(Mutex<AsyncClient>);
 
 pub struct BearerToken(String);
 
-
+enum StateOrNot<'a> {
+    State(State<'a, RwLock<LastValueStore>>),
+    Not(&'a RwLock<LastValueStore>),
+}
 
 async fn find_and_update_or_insert_item_by_key(
-    last_value_store_mutex: State<'_, RwLock<LastValueStore>>,
+    last_value_store_mutex: StateOrNot<'_> ,
     key_to_find: &str,
     new_value: &str,
 ) {
 
-    let mut last_value_store_write = last_value_store_mutex.write().await;
-    let mut found = false;
+    match last_value_store_mutex {
+        StateOrNot::State(s) => {
+            // Handle the string case
+            let mut last_value_store_write = s.write().await;
+            let mut found = false;
     
 
-    for item in &mut last_value_store_write.lastvaluestoreitem {
-        if item.key == key_to_find {
-            item.value = new_value.to_string();
-            found = true;
-            break;
+            for item in &mut last_value_store_write.lastvaluestoreitem {
+                if item.key == key_to_find {
+                    item.value = new_value.to_string();
+                    found = true;
+                    break;
+                }
+            }
+
+            if !found {
+                // If the key was not found, add a new entry
+                last_value_store_write
+                    .lastvaluestoreitem
+                    .push(LastValueStoreItem {
+                        key: key_to_find.to_string(),
+                        value: new_value.to_string(),
+                    });
+            }
+        }
+        StateOrNot::Not(b) => {
+            // Handle the boolean case
+            let mut last_value_store_write = b.write().await;
+            let mut found = false;
+    
+
+            for item in &mut last_value_store_write.lastvaluestoreitem {
+                if item.key == key_to_find {
+                    item.value = new_value.to_string();
+                    found = true;
+                    break;
+                }
+            }
+
+            if !found {
+                // If the key was not found, add a new entry
+                last_value_store_write
+                    .lastvaluestoreitem
+                    .push(LastValueStoreItem {
+                        key: key_to_find.to_string(),
+                        value: new_value.to_string(),
+                    });
+            }
         }
     }
 
-    if !found {
-        // If the key was not found, add a new entry
-        last_value_store_write
-            .lastvaluestoreitem
-            .push(LastValueStoreItem {
-                key: key_to_find.to_string(),
-                value: new_value.to_string(),
-            });
-    }
+    
 }
 
 async fn get_value_by_key(
@@ -238,115 +272,6 @@ async fn main() {
         }
     }
 
-    
-    
-
-    // Some JSON input data as a &str. Maybe this comes from the user.
-    let default_dashboard_string = r#"
-        {
-            "layout": [],
-            "devices": []
-        }"#;
-
-    // Parse the string of data into serde_json::Value.
-    let mut default_dashboard_json: Dashboard = serde_json::from_str(default_dashboard_string).unwrap();
-
-    let http_client = reqwest::Client::new();
-
-    if basic_settings.automatic_load_dashboard == "True" {
-        // Load default dashboard gist
-        let response = http_client
-            .get("https://gist.githubusercontent.com/raoulspronck/60df74173b8ff477eb5af601f8007f59/raw")
-            .send()
-            .await
-            .unwrap()
-            .text()
-            .await;
-
-        match response {
-            Ok(res) => {
-                default_dashboard_json = serde_json::from_str(&*res).unwrap();
-            }
-            Err(_err) => {}
-        };
-
-        let file_open = std::fs::read_to_string(
-            &"C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
-        );
-    
-        match file_open {
-            Ok(v) => {
-                let res = serde_json::from_str::<Dashboard>(&v);
-    
-                match res {
-                    Ok(_r) => {
-                        // Always save default dashboard
-                        std::fs::write(
-                            "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
-                            serde_json::to_string_pretty(&default_dashboard_json).unwrap(),
-                        )
-                        .unwrap();
-                    }
-                    Err(_err) => {
-                        // save file with new settings
-                        // Save the JSON structure into the other file.
-                        std::fs::write(
-                            "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
-                            serde_json::to_string_pretty(&default_dashboard_json).unwrap(),
-                        )
-                        .unwrap();
-                    }
-                }
-            }
-            Err(_e) => {
-                // save file with new settings
-                // Save the JSON structure into the other file.
-                std::fs::write(
-                    "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
-                    serde_json::to_string_pretty(&default_dashboard_json).unwrap(),
-                )
-                .unwrap();
-            }
-        }
-    } else {
-        let file_open = std::fs::read_to_string(
-            &"C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
-        );
-    
-        match file_open {
-            Ok(v) => {
-                let res = serde_json::from_str::<Dashboard>(&v);
-    
-                match res {
-                    Ok(_r) => {
-                        
-                    }
-                    Err(_err) => {
-                        // save file with new settings
-                        // Save the JSON structure into the other file.
-                        std::fs::write(
-                            "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
-                            serde_json::to_string_pretty(&default_dashboard_json).unwrap(),
-                        )
-                        .unwrap();
-                    }
-                }
-            }
-            Err(_e) => {
-                // save file with new settings
-                // Save the JSON structure into the other file.
-                std::fs::write(
-                    "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
-                    serde_json::to_string_pretty(&default_dashboard_json).unwrap(),
-                )
-                .unwrap();
-            }
-        }
-    
-    }
-    
-
-   
     // Some JSON input data as a &str. Maybe this comes from the user.
     let default_settings_string = r#"
         {
@@ -409,6 +334,195 @@ async fn main() {
             .unwrap();
         }
     }
+
+    // last value store 
+    let last_value_store_lock = RwLock::new(LastValueStore {
+        lastvaluestoreitem: Vec::new(),
+    });
+    
+
+    // Some JSON input data as a &str. Maybe this comes from the user.
+    let default_dashboard_string = r#"
+        {
+            "layout": [],
+            "devices": []
+        }"#;
+
+    // Parse the string of data into serde_json::Value.
+    let mut default_dashboard_json: Dashboard = serde_json::from_str(default_dashboard_string).unwrap();
+
+    let http_client = reqwest::Client::new();
+
+    if basic_settings.automatic_load_dashboard == "True" {
+        // Load default dashboard gist
+        let response = http_client
+            .get("https://gist.githubusercontent.com/raoulspronck/60df74173b8ff477eb5af601f8007f59/raw")
+            .send()
+            .await
+            .unwrap()
+            .text()
+            .await;
+
+        match response {
+            Ok(res) => {
+                default_dashboard_json = serde_json::from_str(&*res).unwrap();
+            }
+            Err(_err) => {}
+        };
+
+        let file_open = std::fs::read_to_string(
+            &"C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
+        );
+    
+        match file_open {
+            Ok(v) => {
+                let res = serde_json::from_str::<Dashboard>(&v);
+    
+                match res {
+                    Ok(r) => {
+                        // Always save default dashboard
+                        std::fs::write(
+                            "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
+                            serde_json::to_string_pretty(&default_dashboard_json).unwrap(),
+                        )
+                        .unwrap();
+
+                        let device_key = exalise_settings.mqtt_settings.device_key.clone();
+                        let http_key = exalise_settings.http_settings.http_key.clone();
+                        let http_secret = exalise_settings.http_settings.http_secret.clone();
+            
+                        let client = reqwest::Client::new();
+
+                        println!("{:?}", &r.devices);
+
+                        let response = client
+                            .get(format!(
+                                "https://api.exalise.com/api/getvaluesfromcustomdashboard"))
+                            .header("x-api-key", http_key)
+                            .header("x-api-secret", http_secret)
+                            .header("x-master-device-key", device_key)
+                            .json(&r.devices)
+                            .send()
+                            .await
+                            .unwrap()
+                            .text()
+                            .await;
+                        
+                        
+
+                        match response {
+                            Ok(res) => {
+                                let json_res = serde_json::from_str::<Vec<ValueReponse>>(&res);
+
+                                match json_res {
+                                    Ok(res) => {
+                                        for value in &res {
+                                            find_and_update_or_insert_item_by_key(
+                                                StateOrNot::Not(&last_value_store_lock),
+                                                value.id_key.as_str(),
+                                                value.value.as_str()).await;
+                                        }
+                                    }
+                                    Err(_err) => {}
+                                }
+                            }
+                            Err(_err) => {}
+                        }
+                    }
+                    Err(_err) => {
+                        // save file with new settings
+                        // Save the JSON structure into the other file.
+                        std::fs::write(
+                            "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
+                            serde_json::to_string_pretty(&default_dashboard_json).unwrap(),
+                        )
+                        .unwrap();
+                    }
+                }
+            }
+            Err(_e) => {
+                // save file with new settings
+                // Save the JSON structure into the other file.
+                std::fs::write(
+                    "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
+                    serde_json::to_string_pretty(&default_dashboard_json).unwrap(),
+                )
+                .unwrap();
+            }
+        }
+    } else {
+        let file_open = std::fs::read_to_string(
+            &"C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
+        );
+    
+        match file_open {
+            Ok(v) => {
+                let res = serde_json::from_str::<Dashboard>(&v);
+    
+                match res {
+                    Ok(r) => {
+                        let device_key = exalise_settings.mqtt_settings.device_key.clone();
+                        let http_key = exalise_settings.http_settings.http_key.clone();
+                        let http_secret = exalise_settings.http_settings.http_secret.clone();
+            
+                        let client = reqwest::Client::new();
+
+                        let response = client
+                            .get(format!(
+                                "https://api.exalise.com/api/getvaluesfromcustomdashboard"))
+                            .header("x-api-key", http_key)
+                            .header("x-api-secret", http_secret)
+                            .header("x-master-device-key", device_key)
+                            .json(&r.devices)
+                            .send()
+                            .await
+                            .unwrap()
+                            .text()
+                            .await;
+            
+                        match response {
+                            Ok(res) => {
+                                let json_res = serde_json::from_str::<Vec<ValueReponse>>(&res);
+
+                                match json_res {
+                                    Ok(res) => {
+                                        for value in &res {
+                                            find_and_update_or_insert_item_by_key(
+                                                StateOrNot::Not(&last_value_store_lock),
+                                                value.id_key.as_str(),
+                                                value.value.as_str()).await;
+                                        }
+                                    }
+                                    Err(_err) => {}
+                                }
+                            }
+                            Err(_err) => {}
+                        }
+                    }
+                    Err(_err) => {
+                        // save file with new settings
+                        // Save the JSON structure into the other file.
+                        std::fs::write(
+                            "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
+                            serde_json::to_string_pretty(&default_dashboard_json).unwrap(),
+                        )
+                        .unwrap();
+                    }
+                }
+            }
+            Err(_e) => {
+                // save file with new settings
+                // Save the JSON structure into the other file.
+                std::fs::write(
+                    "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/dashboard.exalise.json",
+                    serde_json::to_string_pretty(&default_dashboard_json).unwrap(),
+                )
+                .unwrap();
+            }
+        }
+    
+    };  
+    
 
     let device_key = exalise_settings.mqtt_settings.device_key.clone();
     let device_key_lastwill = device_key.clone();
@@ -499,9 +613,7 @@ async fn main() {
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec!("")) /* arbitrary number of args to pass to your app */))
         .manage(MqttClient(Mutex::new(client_clone)))
         .manage(BearerToken("".into()))
-        .manage(RwLock::new(LastValueStore {
-            lastvaluestoreitem: Vec::new(),
-        }))
+        .manage(last_value_store_lock)
         .manage(exalise_settings)
         .manage(api_settings)
         .setup(move |app| {
@@ -640,7 +752,7 @@ async fn main() {
 
                                         // Find and update the item with the specified key, or insert a new entry
                                         find_and_update_or_insert_item_by_key(
-                                            last_value_store,
+                                            StateOrNot::State(last_value_store),
                                             key_to_find,
                                             new_value,
                                         )
@@ -695,7 +807,7 @@ async fn main() {
 
                                         // Find and update the item with the specified key, or insert a new entry
                                         find_and_update_or_insert_item_by_key(
-                                            last_value_store,
+                                            StateOrNot::State(last_value_store),
                                             key_to_find_str,
                                             new_value,
                                         )
@@ -1675,7 +1787,7 @@ async fn get_last_value(
                     let value = res.clone();
 
                     find_and_update_or_insert_item_by_key(
-                        last_value_store,
+                        StateOrNot::State(last_value_store),
                         key_to_find_str,
                         value.as_str(),
                     )
