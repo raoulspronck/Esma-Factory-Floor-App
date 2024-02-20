@@ -27,6 +27,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::str;
 use std::sync::atomic::Ordering;
+use std::time::SystemTime;
 use tauri::api::process::{Command, CommandEvent};
 use tauri::Manager;
 use tauri::State;
@@ -122,17 +123,35 @@ async fn get_value_by_key(
 
 #[tokio::main]
 async fn main() {
-    //create a log file
+    let log_file = std::fs::read_to_string(
+        &"C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/logs.txt",
+    );
 
-    if !std::path::Path::new(
-        "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/logs.txt",
-    )
-    .exists()
-    {
-        std::fs::File::create(
-            "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/logs.txt",
-        )
-        .unwrap();
+    let date = Local::now();
+    // Append a new line indicating the time the file was opened
+    let new_line = format!("App opened at: {}\n", date.format("%d-%m-%Y %H:%M:%S"));
+
+    match log_file {
+        Ok(v) => {
+           // Write to file
+           // Get the current system time
+            let result = v + &new_line;
+
+            std::fs::write(
+                "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/logs.txt",
+                result,
+            )
+            .unwrap();
+        }
+        Err(_e) => {
+            // save file with new settings
+            // Save the JSON structure into the other file.
+            std::fs::write(
+                "C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/logs.txt",
+                new_line,
+            )
+            .unwrap();
+        }
     }
 
     // Some JSON input data as a &str. Maybe this comes from the user.
