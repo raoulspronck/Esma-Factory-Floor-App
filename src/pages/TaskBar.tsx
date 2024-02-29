@@ -433,7 +433,7 @@ const TaskBar: React.FC<TaskBarProps> = ({
   }, [alerts]);
 
   useEffect(() => {
-    if (pingTime < -20) {
+    if (pingTime < -60) {
       relaunch();
     }
   }, [pingTime]);

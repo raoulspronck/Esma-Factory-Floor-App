@@ -16,7 +16,7 @@ const DisplayAlert: React.FC<DisplayAlertProps> = ({
   onClose,
   setDisplayActiveAlerts,
 }) => {
-  const [count, setCount] = useState(10);
+  const [count, setCount] = useState(30);
 
   useEffect(() => {
     const interval = setInterval(() => {
