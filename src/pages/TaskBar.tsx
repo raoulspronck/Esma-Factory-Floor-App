@@ -65,6 +65,7 @@ import { FiAlertCircle } from "react-icons/fi";
 import { formatDate } from "../utils/formatDate";
 import GeneralSettingsModal from "../components/SettingsMenu/generalSettingsModal";
 import { emitter } from "../index";
+import DisplayAlert from "../components/DisplayAlert";
 interface TaskBarProps {
   login: boolean;
   setlayoutChangable: React.Dispatch<React.SetStateAction<boolean>>;
@@ -410,75 +411,20 @@ const TaskBar: React.FC<TaskBarProps> = ({
     for (let i = 0; i < alerts.length; i++) {
       // key to subscribe to
       let alert_key = `notification---${alerts[i].device_key}---${alerts[i].data_point}`;
-
       // subscribe to all the allerts it is already subscribed to
       if (!subscribedAlerts.includes(alert)) {
         listen(alert_key, (event) => {
           // what happens if alert comes in
           let message = event.payload as string;
+          let notification_key =
+            alert_key + "/" + message + "/" + alerts[i].require_accept;
 
-          // if it includes alert accepted
-          if (message.includes("/ alert accepted")) {
-            // 2 things or the alert shown is accepted or an other alert is accepted then disregard
-            let message_without_aceptance = message.replace(
-              "/ alert accepted",
-              ""
-            );
-
-            // check if it was included and if so remove it
-            var index = activeAlerts.current.indexOf(
-              alert_key + "/" + message_without_aceptance + "/Yes"
-            );
-
-            if (index !== -1) {
-              var tempArray = activeAlerts.current;
-              tempArray.splice(index, 1);
-
-              activeAlerts.current = [...tempArray];
-              setDisplayActiveAlerts([...tempArray]);
-            } else {
-              index = activeAlerts.current.indexOf(
-                alert_key + "/" + message_without_aceptance + "/null"
-              );
-
-              if (index !== -1) {
-                var tempArray = activeAlerts.current;
-                tempArray.splice(index, 1);
-
-                activeAlerts.current = [...tempArray];
-                setDisplayActiveAlerts([...tempArray]);
-              }
-            }
-          } else {
-            let notification_key =
-              alert_key + "/" + message + "/" + alerts[i].require_accept;
-            // If message not yet active, add it
-            if (!activeAlerts.current.includes(notification_key)) {
-              var tempArray = [notification_key, ...activeAlerts.current];
-              activeAlerts.current = tempArray;
-              setDisplayActiveAlerts(tempArray);
-
-              // if message does not need to be accepted , remove it from the list
-              if (alerts[i].require_accept === "No") {
-                setTimeout(() => {
-                  const array = displayActiveAlerts.filter(
-                    (e) => e === notification_key
-                  );
-                  setDisplayActiveAlerts(array);
-                  activeAlerts.current = array;
-
-                  if (array.length === 0) {
-                    onClose();
-                  }
-                }, 30000);
-              }
-            }
-          }
-
-          if (activeAlerts.current.length > 0) {
+          // If message not yet active, add it
+          if (!activeAlerts.current.includes(notification_key)) {
+            var tempArray = [notification_key, ...activeAlerts.current];
+            activeAlerts.current = tempArray;
+            setDisplayActiveAlerts(() => [...tempArray]);
             onOpen();
-          } else {
-            onClose();
           }
         });
         setSubscribedAlerts((e) => [alert, ...e]);
@@ -808,19 +754,6 @@ const TaskBar: React.FC<TaskBarProps> = ({
           </Flex>
         )}
 
-        {displayActiveAlerts.length > 0 ? (
-          <IconButton
-            ml="2"
-            colorScheme={"orange"}
-            aria-label={"restart app"}
-            icon={<FiAlertCircle />}
-            mr={2}
-            onClick={onOpen}
-            size={"md"}
-            fontSize={"25px"}
-          />
-        ) : null}
-
         <Spacer />
         <Text fontSize={"25px"} style={{ transform: "scale(1, 0.9)" }} ml={2}>
           {currentDate}
@@ -972,41 +905,29 @@ const TaskBar: React.FC<TaskBarProps> = ({
               bgColor="orange.400"
               color="white"
             >
-              {displayActiveAlerts.map((a, key) => {
-                let alert = a.split("/");
-
+              {displayActiveAlerts.map((a) => {
                 return (
-                  <Flex
-                    key={key}
-                    alignItems={"center"}
-                    borderBottom={"2px"}
-                    borderTop={"2px"}
-                    paddingTop={"5px"}
-                    paddingBottom={"5px"}
-                    marginTop={"-2px"}
-                  >
-                    <Text marginRight={"20px"}>{alert[1]}</Text>
-
-                    {alert[2] === "No" ? null : (
-                      <IconButton
-                        colorScheme="green"
-                        fontSize={"50px"}
-                        height={"70px"}
-                        width={"70px"}
-                        minW={"70px"}
-                        onClick={() => acceptNotification(a)}
-                        marginLeft={"auto"}
-                        icon={<BsCheckCircle />}
-                        aria-label={"Accept notification"}
-                      />
-                    )}
-                  </Flex>
+                  <DisplayAlert
+                    key={a}
+                    activeAlerts={activeAlerts}
+                    alert={a}
+                    alertSplit={a.split("/")}
+                    onClose={onClose}
+                    setDisplayActiveAlerts={setDisplayActiveAlerts}
+                  />
                 );
               })}
             </AlertDialogBody>
 
             <AlertDialogFooter>
-              <Button colorScheme="gray" onClick={onClose}>
+              <Button
+                colorScheme="gray"
+                onClick={() => {
+                  setDisplayActiveAlerts([]);
+                  activeAlerts.current = [];
+                  onClose();
+                }}
+              >
                 Sluit
               </Button>
             </AlertDialogFooter>

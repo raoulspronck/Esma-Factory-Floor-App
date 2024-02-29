@@ -32,16 +32,9 @@ function App() {
 
   const enableAutoStart = async () => {
     await enable();
-    console.log(`registered for autostart? ${await isEnabled()}`);
   };
 
   useEffect(() => {
-    onUpdaterEvent(({ error, status }) => {
-      invoke("write_to_log_file", {
-        data: `${status + " / " + error} \r\n`,
-      });
-    });
-
     if (!functionCalled.current) {
       functionCalled.current = true;
 

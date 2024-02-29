@@ -27,8 +27,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::str;
 use std::sync::atomic::Ordering;
-use std::time::SystemTime;
-use tauri::api::process::{Command, CommandEvent};
+use tauri::api::process::Command; // CommandEvent
 use tauri::Manager;
 use tauri::State;
 use tokio::sync::Mutex;
@@ -40,6 +39,9 @@ use chrono::prelude::*;
 pub struct MqttClient(Mutex<AsyncClient>);
 
 pub struct BearerToken(String);
+
+const BROKER_URL: &str = "mqtt.exalise.com";
+const BROKER_PORT: u16 = 1883;
 
 enum StateOrNot<'a> {
     State(State<'a, RwLock<LastValueStore>>),
@@ -120,16 +122,14 @@ async fn get_value_by_key(
     None
 }
 
-
-#[tokio::main]
-async fn main() {
+fn write_to_log(message: &str) {
     let log_file = std::fs::read_to_string(
         &"C:/Users/Gebruiker/Documents/cnc-monitoring-sofware-settings/logs.txt",
     );
 
     let date = Local::now();
     // Append a new line indicating the time the file was opened
-    let new_line = format!("App opened at: {}\n", date.format("%d-%m-%Y %H:%M:%S"));
+    let new_line = format!("{}: {}\n", date.format("%d-%m-%Y %H:%M:%S"), message);
 
     match log_file {
         Ok(v) => {
@@ -153,6 +153,11 @@ async fn main() {
             .unwrap();
         }
     }
+}
+
+#[tokio::main]
+async fn main() {
+    write_to_log("App opened");
 
     // Some JSON input data as a &str. Maybe this comes from the user.
     let default_basic_settings_string = r#"
@@ -412,8 +417,6 @@ async fn main() {
             
                         let client = reqwest::Client::new();
 
-                        println!("{:?}", &r.devices);
-
                         let response = client
                             .get(format!(
                                 "https://api.exalise.com/api/getvaluesfromcustomdashboard"))
@@ -556,10 +559,7 @@ async fn main() {
     let stop_bits_number = exalise_settings.rs232_settings.stop_bits_number.clone();
 
     //connect to mqtt broker
-    let broker_url = "mqtt.exalise.com";
-    let broker_port = 1883;
-
-    let mut mqttoptions = MqttOptions::new(device_key, broker_url, broker_port);
+    let mut mqttoptions = MqttOptions::new(device_key, BROKER_URL, BROKER_PORT);
 
     let will = LastWill::new(
         format!("exalise/lastwill/{}", device_key_lastwill),
@@ -579,7 +579,7 @@ async fn main() {
     let device_key_clone = device_key_lastwill.clone();
     let device_key_clone_clone = device_key_lastwill.clone();
     let device_key_clone_clone_clone = device_key_lastwill.clone();
-    let device_key_clone_clone_clone_clone = device_key_lastwill.clone();
+    let _device_key_clone_clone_clone_clone = device_key_lastwill.clone();
 
     let http_key = exalise_settings.http_settings.http_key.clone();
     let http_secret = exalise_settings.http_settings.http_secret.clone();
@@ -640,10 +640,10 @@ async fn main() {
             //if basic_settings.gesture_control == "True" {
             //}
 
-            let resource_path = app
+            /* let resource_path = app
             .path_resolver()
             .resolve_resource("binarieresources/light_control.task")
-            .expect("failed to resolve resource");
+            .expect("failed to resolve resource"); 
 
             let _window = app.get_window("main").unwrap();
             let client_clone = client.clone();
@@ -674,7 +674,7 @@ async fn main() {
 
                     // sleep 5 minutes
                     sleep(Duration::from_secs(60)).await;              }
-            });
+            }); */
          
             
 
@@ -696,8 +696,6 @@ async fn main() {
             );
 
             tauri::async_runtime::spawn(async move {
-                
-
                 // receive incoming notifications
                 let mut connected = false;
                 loop {
@@ -725,11 +723,15 @@ async fn main() {
                                     .await
                                     .unwrap();
                                 connected = true;
+
+                                write_to_log("MQTT connection established");
                             }
 
                             if let Event::Incoming(Packet::PingResp) = s {
                                 main_window.emit("Ping", "check").unwrap();
                             }
+
+                           
 
                             if let Event::Incoming(Packet::ConnAck(ConnAck {
                                 session_present: _,
@@ -843,6 +845,7 @@ async fn main() {
                         }
                         Err(e) => {
                             main_window.emit("exalise-connection-status", format!("{:?}", e)).unwrap();
+                            write_to_log(format!("MQTT disconnected due to error: {:?}", e).as_str());
                             if connected {
                                 CONNECTED_TO_EXALISE.store(false, Ordering::Relaxed);
                                 main_window
