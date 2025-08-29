@@ -223,7 +223,7 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
             </FormControl>
           </Box>
 
-          {filePathFile != "" ? (
+          {filePathFile !== "" ? (
             <>
               <Flex
                 alignItems={"center"}
