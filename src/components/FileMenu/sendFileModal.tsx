@@ -29,6 +29,7 @@ import React, { useEffect, useState } from "react";
 import { BsChevronDown, BsChevronRight } from "react-icons/bs";
 import { GoFileDirectory } from "react-icons/go";
 import { Store } from "tauri-plugin-store-api";
+import { readTextFile } from "@tauri-apps/api/fs";
 
 interface SendFileModalProps {
   isOpen: boolean;
@@ -57,6 +58,7 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [advanceSettings, setAdvanceSettings] = useState(false);
+  const [readFile, setReadFile] = useState(false);
 
   const [enableBreaks, setEnableBreaks] = useState(0);
   const [maxChar, setMaxChar] = useState(5000);
@@ -65,6 +67,8 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
   const [softwareBreaks, setSoftwareBreaks] = useState(0);
   const [stop, setStop] = useState(19);
   const [resume, setResume] = useState(17);
+
+  const [fileFirst3Lines, setFileFirst3Lines] = useState([""]);
 
   useEffect(() => {
     const store = new Store(".settings.dat");
@@ -78,7 +82,7 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
           ? null
           : setFilePathFile(JSON.stringify(e))
       )
-      .catch((_e) => null);
+      .catch((_e: any) => null);
 
     store
       .get("enableBreaks")
@@ -89,7 +93,7 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
           ? null
           : setEnableBreaks(parseInt(JSON.stringify(e)))
       )
-      .catch((_e) => null);
+      .catch((_e: any) => null);
 
     store
       .get("maxChar")
@@ -100,7 +104,7 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
           ? null
           : setMaxChar(parseInt(JSON.stringify(e)))
       )
-      .catch((_e) => null);
+      .catch((_e: any) => null);
 
     store
       .get("delay")
@@ -111,7 +115,7 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
           ? null
           : setDelay(parseInt(JSON.stringify(e)))
       )
-      .catch((_e) => null);
+      .catch((_e: any) => null);
 
     store
       .get("softwareBreaks")
@@ -122,7 +126,7 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
           ? null
           : setSoftwareBreaks(parseInt(JSON.stringify(e)))
       )
-      .catch((_e) => null);
+      .catch((_e: any) => null);
 
     store
       .get("stop")
@@ -133,7 +137,7 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
           ? null
           : setStop(parseInt(JSON.stringify(e)))
       )
-      .catch((_e) => null);
+      .catch((_e: any) => null);
 
     store
       .get("resume")
@@ -144,8 +148,27 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
           ? null
           : setResume(parseInt(JSON.stringify(e)))
       )
-      .catch((_e) => null);
+      .catch((_e: any) => null);
   }, []);
+
+  useEffect(() => {
+    const loadFilePreview = async () => {
+      if (filePathFile !== "") {
+        try {
+          const content = await readTextFile(filePathFile);
+          console.log(content);
+          const lines = content.split(/\r?\n/);
+          setFileFirst3Lines(lines);
+        } catch (err) {
+          setFileFirst3Lines(["⚠️ Unable to read file"]);
+        }
+      } else {
+        setFileFirst3Lines([""]);
+      }
+    };
+
+    loadFilePreview();
+  }, [filePathFile]);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} size={modalSize}>
@@ -199,6 +222,28 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
               </InputGroup>
             </FormControl>
           </Box>
+
+          {filePathFile != "" ? (
+            <>
+              <Flex
+                alignItems={"center"}
+                width="fit-content"
+                mt={2}
+                cursor="pointer"
+                onClick={() => setReadFile((e) => !e)}
+              >
+                <Text fontSize={["12px", "14px", "16px"]} fontWeight="medium">
+                  First 5 lines of file
+                </Text>
+              </Flex>
+
+              <Box maxH={"200px"} overflowY={"scroll"}>
+                {fileFirst3Lines.map((e, key) => (
+                  <Text key={key}>{e}</Text>
+                ))}
+              </Box>
+            </>
+          ) : null}
 
           <Flex
             alignItems={"center"}
