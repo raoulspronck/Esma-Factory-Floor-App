@@ -17,7 +17,6 @@ import {
 import { invoke } from "@tauri-apps/api";
 import React, { useEffect, useRef, useState } from "react";
 import CustomImage from "../../CustomImage";
-import { A } from "@tauri-apps/api/path-9b1e7ad5";
 
 interface QuizModalProps {
   isOpen: boolean;

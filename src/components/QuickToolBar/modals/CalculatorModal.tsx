@@ -16,7 +16,21 @@ import {
 } from "@chakra-ui/react";
 import React, { useState } from "react";
 import { BsArrowLeft } from "react-icons/bs";
-let basicMath = require("advanced-calculator");
+// Evaluates a math expression string.
+// Transforms notation to JS equivalents, then runs via Function constructor.
+function evaluate(expr: string): number {
+  const normalized = expr
+    .replace(/\^/g, "**")
+    .replace(/sin\(/g, "Math.sin(")
+    .replace(/cos\(/g, "Math.cos(")
+    .replace(/tan\(/g, "Math.tan(")
+    .replace(/sqrt\(/g, "Math.sqrt(")
+    .replace(/ln\(/g, "Math.log(")
+    .replace(/log\(/g, "Math.log10(")
+    .replace(/pi/g, `${Math.PI}`);
+  // eslint-disable-next-line no-new-func
+  return Function(`"use strict"; return (${normalized})`)() as number;
+}
 
 interface CalculatorModalProps {
   isOpen: boolean;
@@ -273,9 +287,13 @@ const CalculatorModal: React.FC<CalculatorModalProps> = ({
   };
 
   const calculate = () => {
-    const anwser = basicMath.evaluate(calculation);
-    setCalculation(anwser);
-    setCalculationArray([anwser]);
+    try {
+      const answer = String(evaluate(calculation));
+      setCalculation(answer);
+      setCalculationArray([answer]);
+    } catch (_) {
+      setOutput("Error");
+    }
   };
 
   const clear = () => {

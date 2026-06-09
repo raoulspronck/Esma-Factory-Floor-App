@@ -12,6 +12,7 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api";
 import WidgetModal from "./WidgetModal";
 import DisplayWidget from "./DisplayWidget";
+import { WidgetErrorBoundary } from "../../WidgetErrorBoundary";
 import { RiDeleteBin5Fill } from "react-icons/ri";
 import { BiHide } from "react-icons/bi";
 
@@ -205,17 +206,18 @@ const DeviceWidget: React.FC<DeviceWidgetProps> = ({
 
       {deviceBlock.widgets.length > 0
         ? deviceBlock.widgets.map((e) => (
-            <DisplayWidget
-              key={e.id}
-              widget={e}
-              deviceKey={deviceBlock.key}
-              deviceId={deviceBlock.id}
-              layoutChangable={layoutChangable}
-              setDashboard={setDashboard}
-              dashboard={dashboard}
-              setRefresh={setRefresh}
-              dataPoints={dataPoints}
-            />
+            <WidgetErrorBoundary key={e.id} widgetName={e.widget_type ?? e.type ?? "Widget"}>
+              <DisplayWidget
+                widget={e}
+                deviceKey={deviceBlock.key}
+                deviceId={deviceBlock.id}
+                layoutChangable={layoutChangable}
+                setDashboard={setDashboard}
+                dashboard={dashboard}
+                setRefresh={setRefresh}
+                dataPoints={dataPoints}
+              />
+            </WidgetErrorBoundary>
           ))
         : null}
 

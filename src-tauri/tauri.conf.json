@@ -3,8 +3,8 @@
   "build": {
     "beforeBuildCommand": "npm run build",
     "beforeDevCommand": "npm run start",
-    "devPath": "http://localhost:3000",
-    "distDir": "../build"
+    "devPath": "http://localhost:5173",
+    "distDir": "../dist"
   },
   "package": {
     "productName": "Exalise production monitoring software",
@@ -97,7 +97,18 @@
         "fullscreen": true,
         "resizable": true,
         "title": "Exalise production monitoring software",
-        "width": 1020
+        "width": 1020,
+        "visible": false
+      },
+      {
+        "label": "splashscreen",
+        "title": "Loading...",
+        "url": "splashscreen.html",
+        "width": 1000,
+        "height": 520,
+        "center": true,
+        "resizable": false,
+        "decorations": false
       }
     ]
   }

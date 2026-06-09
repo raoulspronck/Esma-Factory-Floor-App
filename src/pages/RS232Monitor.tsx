@@ -3,12 +3,10 @@ import { listen } from "@tauri-apps/api/event";
 import React, { useEffect, useRef, useState } from "react";
 import SerialLine from "../components/serialLine";
 
-interface RS232MonitorProps {
-  setError: React.Dispatch<React.SetStateAction<string>>;
-  page: number;
-}
+import { useConnectionStore } from "../stores/connectionStore";
 
-const RS232Monitor: React.FC<RS232MonitorProps> = ({ setError, page }) => {
+const RS232Monitor: React.FC = () => {
+  const setRs232Error = useConnectionStore((s) => s.setRs232Error);
   const functionCalled = useRef(false);
   const monitor = useRef(false);
   const [checkBox2, setCheckBox2] = useState(monitor.current);
@@ -24,7 +22,7 @@ const RS232Monitor: React.FC<RS232MonitorProps> = ({ setError, page }) => {
       functionCalled.current = true;
 
       listen("rs232", (event) => {
-        setError("");
+        setRs232Error("");
 
         const json = JSON.parse(event.payload as string);
 
@@ -39,7 +37,7 @@ const RS232Monitor: React.FC<RS232MonitorProps> = ({ setError, page }) => {
           ]);
         }
 
-        if (endOfDiv.current !== null && autoScroll.current && page === 1) {
+        if (endOfDiv.current !== null && autoScroll.current) {
           endOfDiv.current.scrollIntoView();
         }
       });

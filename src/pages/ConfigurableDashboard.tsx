@@ -8,37 +8,36 @@ import {
   Text,
   useDisclosure,
 } from "@chakra-ui/react";
-import { invoke } from "@tauri-apps/api";
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import GridLayout from "react-grid-layout";
 import { MdAddToQueue } from "react-icons/md";
 import AddDevicesToDashboardModal from "../components/Dashboard/AddDevicesToDashboardModal";
 import DeviceWidget from "../components/Dashboard/Device/DeviceWidget";
 import QuickToolBar from "../components/QuickToolBar/QuickToolBar";
 
-interface ConfigurableDashboardProps {
-  dashboard: {
-    layout: any[];
-    devices: any[];
-  };
-  setDashboard: React.Dispatch<
-    React.SetStateAction<{
-      layout: any[];
-      devices: any[];
-    }>
-  >;
-  setlayoutChangable: React.Dispatch<React.SetStateAction<boolean>>;
-  layoutChangable: boolean;
-  login: boolean;
-}
+import { useDashboardStore } from "../stores/dashboardStore";
+import { useUiStore } from "../stores/uiStore";
+import { Dashboard } from "../types";
+import { WidgetErrorBoundary } from "../components/WidgetErrorBoundary";
 
-const ConfigurableDashboard: React.FC<ConfigurableDashboardProps> = ({
-  layoutChangable,
-  setlayoutChangable,
-  setDashboard,
-  dashboard,
-  login,
-}) => {
+const ConfigurableDashboard: React.FC = () => {
+  const dashboard = useDashboardStore((s) => s.dashboard);
+  const setDashboard = useDashboardStore((s) => s.setDashboard);
+  const updateLayout = useDashboardStore((s) => s.updateLayout);
+  const layoutChangable = useUiStore((s) => s.layoutChangable);
+  const setLayoutChangable = useUiStore((s) => s.setLayoutChangable);
+  const login = useUiStore((s) => s.login);
+
+  // Adapter so child components that expect React.Dispatch<SetStateAction<...>>
+  // still work — they only call setDashboard(value), never the functional form.
+  const setDashboardCompat = useCallback(
+    (d: Dashboard | ((prev: Dashboard) => Dashboard)) => {
+      const resolved = typeof d === "function" ? d(dashboard) : d;
+      setDashboard(resolved);
+    },
+    [dashboard, setDashboard]
+  );
+
   const {
     isOpen: isOpenAddDevicesToDashboard,
     onOpen: onOpenAddDevicesToDashboard,
@@ -48,35 +47,21 @@ const ConfigurableDashboard: React.FC<ConfigurableDashboardProps> = ({
   const [currentLayout, setCurrentLayout] = useState(null);
   const [refresh, setRefresh] = useState(false);
 
-  const saveLayout = () => {
-    const newLayout = currentLayout.map((item: any) => {
-      return {
-        i: item.i,
-        x: item.x,
-        y: item.y,
-        w: item.w,
-        h: item.h,
-      };
-    });
-
-    invoke("save_dashboard_layout", {
-      dashboard: {
-        layout: newLayout,
-        devices: dashboard.devices,
-      },
-    })
-      .then((i) => {
-        if (i === "saved") {
-          setDashboard((dash) => {
-            return {
-              layout: newLayout,
-              devices: dash.devices,
-            };
-          });
-          setlayoutChangable(false);
-        }
-      })
-      .catch((e) => console.log(e));
+  const saveLayout = async () => {
+    if (!currentLayout) return;
+    const newLayout = (currentLayout as any[]).map((item: any) => ({
+      i: item.i,
+      x: item.x,
+      y: item.y,
+      w: item.w,
+      h: item.h,
+    }));
+    try {
+      await updateLayout(newLayout);
+      setLayoutChangable(false);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   if (refresh) {
@@ -116,14 +101,16 @@ const ConfigurableDashboard: React.FC<ConfigurableDashboardProps> = ({
                     key={e.id}
                     data-grid={dashboard.layout.filter((i) => i.i === e.id)[0]}
                   >
-                    <DeviceWidget
-                      deviceBlock={e}
-                      setDashboard={setDashboard}
-                      dashboard={dashboard}
-                      layoutChangable={layoutChangable}
-                      login={login}
-                      setRefresh={setRefresh}
-                    />
+                    <WidgetErrorBoundary widgetName={e.name ?? e.key}>
+                      <DeviceWidget
+                        deviceBlock={e}
+                        setDashboard={setDashboardCompat as any}
+                        dashboard={dashboard as any}
+                        layoutChangable={layoutChangable}
+                        login={login}
+                        setRefresh={setRefresh}
+                      />
+                    </WidgetErrorBoundary>
                   </div>
                 );
               } else {
@@ -174,8 +161,8 @@ const ConfigurableDashboard: React.FC<ConfigurableDashboardProps> = ({
       <AddDevicesToDashboardModal
         isOpen={isOpenAddDevicesToDashboard}
         onClose={onCloseAddDevicesToDashboard}
-        dashboard={dashboard}
-        setDashboard={setDashboard}
+        dashboard={dashboard as any}
+        setDashboard={setDashboardCompat as any}
       />
     </Box>
   );
