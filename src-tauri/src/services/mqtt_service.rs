@@ -120,6 +120,11 @@ pub fn start_mqtt_loop(
                         let _ = main_window.emit("exalise-connection", "disconnected");
                         connected = false;
                     }
+                    // rumqttc does not back off on its own; without a delay here a
+                    // persistent connect failure spins into a tight reconnect loop that
+                    // hammers socket creation and can trip spurious OS-level socket
+                    // errors (e.g. WSAStartup failures on Windows).
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 }
             }
         }
