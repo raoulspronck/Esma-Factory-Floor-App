@@ -21,6 +21,8 @@ jobs:
           node-version: 20
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
+      - name: use https instead of ssh for github git deps
+        run: git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
       - name: install app dependencies and build it
         run: yarn && yarn build
       - uses: tauri-apps/tauri-action@v0
