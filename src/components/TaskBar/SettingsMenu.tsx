@@ -1,6 +1,6 @@
 import { Flex, Icon, Menu, MenuButton, MenuItem, MenuList, Text, useDisclosure } from "@chakra-ui/react";
 import { invoke } from "@tauri-apps/api";
-import { useEffect, useRef, useState } from "react";
+import { ElementType, useEffect, useRef, useState } from "react";
 import { AiOutlineApi, AiOutlineCloudUpload, AiOutlineSetting, AiOutlineUsb } from "react-icons/ai";
 
 import EsmaApiSettingsModal from "../SettingsMenu/esmaApiSettingsModal";
@@ -78,24 +78,41 @@ export default function SettingsMenu() {
       .catch(console.log);
   }, []);
 
+  const itemIcon = (icon: ElementType) => (
+    <Flex
+      boxSize="40px"
+      borderRadius="lg"
+      bg="brand.50"
+      color="brand.600"
+      align="center"
+      justify="center"
+    >
+      <Icon as={icon} boxSize="22px" />
+    </Flex>
+  );
+
   return (
-    <Menu gutter={5}>
+    <Menu gutter={8}>
       <MenuButton
-        borderRadius="5px"
-        ml={1}
-        width="85px"
-        justifyContent="center"
-        bgColor="twitter.400"
-        _expanded={{ bg: "twitter.500" }}
-        height="40px"
+        borderRadius="xl"
+        ml={2}
+        height="52px"
+        px={5}
+        fontSize="lg"
+        fontWeight="semibold"
+        color="white"
+        bg="whiteAlpha.200"
+        _hover={{ bg: "whiteAlpha.300" }}
+        _expanded={{ bg: "whiteAlpha.400" }}
+        transition="background 0.15s ease"
       >
         Settings
       </MenuButton>
-      <MenuList ml={-1} bgColor="twitter.400">
-        <MenuItem onClick={onOpenSerial} bgColor="twitter.400" _hover={{ bg: "twitter.500" }}>
-          <Flex alignItems="center" width="100%">
-            <Icon as={AiOutlineUsb} />
-            <Text ml={2}>Serial port</Text>
+      <MenuList>
+        <MenuItem onClick={onOpenSerial} minH="60px">
+          <Flex alignItems="center" width="100%" gap={3}>
+            {itemIcon(AiOutlineUsb)}
+            <Text>Serial port</Text>
           </Flex>
         </MenuItem>
         <SerialPortSettingModal
@@ -107,10 +124,10 @@ export default function SettingsMenu() {
           isOpen={isOpenSerial} onClose={onCloseSerial}
         />
 
-        <MenuItem onClick={onOpenMqtt} bgColor="twitter.400" _hover={{ bg: "twitter.500" }}>
-          <Flex alignItems="center" width="100%">
-            <Icon as={AiOutlineCloudUpload} />
-            <Text ml={2}>Exalise mqtt</Text>
+        <MenuItem onClick={onOpenMqtt} minH="60px">
+          <Flex alignItems="center" width="100%" gap={3}>
+            {itemIcon(AiOutlineCloudUpload)}
+            <Text>Exalise mqtt</Text>
           </Flex>
         </MenuItem>
         <ExaliseSettingModal
@@ -120,10 +137,10 @@ export default function SettingsMenu() {
           deviceKey={deviceKey} setDeviceKey={setDeviceKey}
         />
 
-        <MenuItem onClick={onOpenHttp} bgColor="twitter.400" _hover={{ bg: "twitter.500" }}>
-          <Flex alignItems="center" width="100%">
-            <Icon as={AiOutlineCloudUpload} />
-            <Text ml={2}>Exalise http</Text>
+        <MenuItem onClick={onOpenHttp} minH="60px">
+          <Flex alignItems="center" width="100%" gap={3}>
+            {itemIcon(AiOutlineCloudUpload)}
+            <Text>Exalise http</Text>
           </Flex>
         </MenuItem>
         <ExaliseHttpSettingModal
@@ -132,10 +149,10 @@ export default function SettingsMenu() {
           httpSecret={httpSecret} setHttpSecret={setHttpSecret}
         />
 
-        <MenuItem onClick={onOpenApi} bgColor="twitter.400" _hover={{ bg: "twitter.500" }}>
-          <Flex alignItems="center" width="100%">
-            <Icon as={AiOutlineApi} />
-            <Text ml={2}>Api settings</Text>
+        <MenuItem onClick={onOpenApi} minH="60px">
+          <Flex alignItems="center" width="100%" gap={3}>
+            {itemIcon(AiOutlineApi)}
+            <Text>Api settings</Text>
           </Flex>
         </MenuItem>
         <EsmaApiSettingsModal
@@ -144,10 +161,10 @@ export default function SettingsMenu() {
           apiPassword={apiPassword} setApiPassword={setApiPassword}
         />
 
-        <MenuItem onClick={onOpenGeneral} bgColor="twitter.400" _hover={{ bg: "twitter.500" }}>
-          <Flex alignItems="center" width="100%">
-            <Icon as={AiOutlineSetting} />
-            <Text ml={2}>General Settings</Text>
+        <MenuItem onClick={onOpenGeneral} minH="60px">
+          <Flex alignItems="center" width="100%" gap={3}>
+            {itemIcon(AiOutlineSetting)}
+            <Text>General Settings</Text>
           </Flex>
         </MenuItem>
         <GeneralSettingsModal

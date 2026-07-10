@@ -16,21 +16,16 @@ import {
   ModalFooter,
   ModalHeader,
   ModalOverlay,
-  NumberDecrementStepper,
-  NumberIncrementStepper,
-  NumberInput,
-  NumberInputField,
-  NumberInputStepper,
   Text,
   useBreakpointValue,
 } from "@chakra-ui/react";
 import * as Dialog from "@tauri-apps/api/dialog";
 import React, { useEffect, useState } from "react";
 import { BsChevronDown, BsChevronRight } from "react-icons/bs";
-import { GoFileDirectory } from "react-icons/go";
-import { GrAdd } from "react-icons/gr";
-import { HiMinus } from "react-icons/hi";
+import { FiDownload, FiFolder, FiPlus, FiTrash2 } from "react-icons/fi";
 import { Store } from "tauri-plugin-store-api";
+
+import TouchNumberInput from "../ui/TouchNumberInput";
 
 interface ReceiveFileModalProps {
   isOpen: boolean;
@@ -60,8 +55,7 @@ const ReceiveFileModal: React.FC<ReceiveFileModalProps> = ({
   const [stopFile, setStopFile] = useState(20);
   const [filterDecimals, setFilterDecimals] = useState<number[]>([0, 13]);
 
-  const modalSize = useBreakpointValue(["sm", "lg", "2xl"]);
-  const buttonSize = useBreakpointValue(["sm", "md", "lg"]);
+  const modalSize = useBreakpointValue(["lg", "2xl", "3xl"]);
 
   useEffect(() => {
     const store = new Store(".settings.dat");
@@ -122,205 +116,201 @@ const ReceiveFileModal: React.FC<ReceiveFileModalProps> = ({
       .catch((_e) => null);
   }, []);
 
+  const pickFolder = () => {
+    Dialog.open({
+      defaultPath: "\\\\ESMA-AD\\Public2\\CNC_PROGRAMMAAS+MEET\\CNC FREES\\",
+      directory: true,
+      multiple: false,
+    })
+      .then((e) => (e !== null ? setFilePath(e as string) : null))
+      .catch((e) => console.log("error", e));
+  };
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} size={modalSize}>
-      <ModalOverlay />
+      <ModalOverlay bg="blackAlpha.700" />
       <ModalContent>
-        <ModalHeader fontSize={["17px", "19px", "22px"]} mt={[-2, -2, -1]}>
-          Receive file
-        </ModalHeader>
-        <ModalCloseButton size={buttonSize} />
+        <ModalHeader>Receive file</ModalHeader>
+        <ModalCloseButton />
         <ModalBody>
-          <Box mt={[-2, 0, 2]}>
-            <FormControl fontSize={["sm", "md", "lg"]}>
-              <Flex alignItems="center">
-                <FormLabel fontSize={["sm", "md", "lg"]}>File name</FormLabel>
+          <FormControl>
+            <FormLabel>File name</FormLabel>
+            <InputGroup size="lg">
+              <Input
+                value={fileName}
+                onChange={(e) => setFileName(e.target.value)}
+                placeholder="Program name"
+              />
+              <InputRightAddon
+                h="56px"
+                fontSize="lg"
+                fontWeight="semibold"
+                children=".txt"
+              />
+            </InputGroup>
+          </FormControl>
+
+          {/* One large tap target to pick the destination folder */}
+          <FormControl mt={5}>
+            <FormLabel>Save location</FormLabel>
+            <Flex
+              as="button"
+              onClick={pickFolder}
+              width="100%"
+              minH="84px"
+              align="center"
+              px={5}
+              gap={4}
+              borderRadius="2xl"
+              borderWidth="2px"
+              borderStyle={filePath === "" ? "dashed" : "solid"}
+              borderColor={filePath === "" ? "gray.300" : "brand.500"}
+              bg={filePath === "" ? "gray.50" : "brand.50"}
+              _hover={{ borderColor: "brand.500", bg: "brand.50" }}
+              _active={{ bg: "brand.100" }}
+              transition="all 0.15s ease"
+              textAlign="left"
+            >
+              <Flex
+                boxSize="52px"
+                borderRadius="xl"
+                bg={filePath === "" ? "gray.200" : "brand.500"}
+                color={filePath === "" ? "gray.600" : "white"}
+                align="center"
+                justify="center"
+                flexShrink={0}
+              >
+                <Icon as={FiFolder} boxSize="26px" />
               </Flex>
-              <InputGroup size={buttonSize}>
-                <Input
-                  fontSize={["sm", "md", "lg"]}
-                  value={fileName}
-                  onChange={(e) => setFileName(e.target.value)}
-                />
-                <InputRightAddon children=".txt" />
-              </InputGroup>
-            </FormControl>
-          </Box>
+              {filePath === "" ? (
+                <Text fontSize="lg" fontWeight="medium" color="gray.600">
+                  Tap to choose a folder…
+                </Text>
+              ) : (
+                <Text fontSize="lg" fontWeight="bold" noOfLines={2} wordBreak="break-all">
+                  {filePath}
+                </Text>
+              )}
+            </Flex>
+          </FormControl>
 
-          <Box mt={3}>
-            <FormControl fontSize={["sm", "md", "lg"]}>
-              <Flex alignItems="center">
-                <FormLabel fontSize={["sm", "md", "lg"]}>FIle path</FormLabel>
-              </Flex>
-
-              <InputGroup size={buttonSize}>
-                <Input
-                  fontSize={["sm", "md", "lg"]}
-                  readOnly
-                  value={filePath}
-                />
-                <InputRightAddon
-                  cursor="pointer"
-                  onClick={() => {
-                    Dialog.open({
-                      defaultPath:
-                        "\\\\ESMA-AD\\Public2\\CNC_PROGRAMMAAS+MEET\\CNC FREES\\",
-                      directory: true,
-                      multiple: false,
-                    })
-                      .then((e) =>
-                        e !== null ? setFilePath(e as string) : null
-                      )
-                      .catch((e) => console.log("error", e));
-                  }}
-                  children={<Icon as={GoFileDirectory} />}
-                />
-              </InputGroup>
-            </FormControl>
-          </Box>
-
-          <Flex
-            alignItems={"center"}
-            width="fit-content"
-            mt={2}
-            cursor="pointer"
+          <Button
+            variant="ghost"
+            colorScheme="brand"
+            mt={5}
+            leftIcon={
+              <Icon as={advanceSettings ? BsChevronDown : BsChevronRight} />
+            }
             onClick={() => setAdvanceSettings((e) => !e)}
           >
-            {advanceSettings ? (
-              <Icon as={BsChevronDown} fontSize={["12px", "14px", "16px"]} />
-            ) : (
-              <Icon as={BsChevronRight} fontSize={["12px", "14px", "16px"]} />
-            )}
-
-            <Text fontSize={["12px", "14px", "16px"]} fontWeight="medium">
-              More settings
-            </Text>
-          </Flex>
+            More settings
+          </Button>
 
           {advanceSettings ? (
-            <>
-              <Flex mt={3}>
-                <Box>
-                  <FormControl>
-                    <FormLabel fontSize={["sm", "md", "lg"]}>
-                      Start decimal
-                    </FormLabel>
+            <Box
+              mt={3}
+              borderRadius="2xl"
+              borderWidth="1px"
+              borderColor="gray.200"
+              bg="gray.50"
+              px={5}
+              py={5}
+            >
+              <Flex gap={6} flexWrap="wrap">
+                <FormControl width="fit-content">
+                  <FormLabel>Start decimal</FormLabel>
+                  <TouchNumberInput
+                    value={startFile}
+                    onChange={setStartFile}
+                    min={0}
+                    max={127}
+                  />
+                </FormControl>
 
-                    <NumberInput
-                      size={buttonSize}
-                      min={0}
-                      max={127}
-                      value={startFile}
-                      onChange={(e) => setStartFile(parseInt(e))}
-                      fontSize={["sm", "md", "lg"]}
-                      width="80px"
-                    >
-                      <NumberInputField />
-                      <NumberInputStepper>
-                        <NumberIncrementStepper />
-                        <NumberDecrementStepper />
-                      </NumberInputStepper>
-                    </NumberInput>
-                  </FormControl>
-                </Box>
-
-                <Box>
-                  <FormControl>
-                    <FormLabel fontSize={["sm", "md", "lg"]}>
-                      Stop decimal
-                    </FormLabel>
-
-                    <NumberInput
-                      size={buttonSize}
-                      min={0}
-                      max={127}
-                      value={stopFile}
-                      onChange={(e) => setStopFile(parseInt(e))}
-                      fontSize={["sm", "md", "lg"]}
-                      width="80px"
-                    >
-                      <NumberInputField />
-                      <NumberInputStepper>
-                        <NumberIncrementStepper />
-                        <NumberDecrementStepper />
-                      </NumberInputStepper>
-                    </NumberInput>
-                  </FormControl>
-                </Box>
+                <FormControl width="fit-content">
+                  <FormLabel>Stop decimal</FormLabel>
+                  <TouchNumberInput
+                    value={stopFile}
+                    onChange={setStopFile}
+                    min={0}
+                    max={127}
+                  />
+                </FormControl>
               </Flex>
 
-              <Box mt={3}>
-                <FormControl>
-                  <FormLabel fontSize={["sm", "md", "lg"]}>
-                    Decimals to filter out
-                  </FormLabel>
-                  <Flex maxW={"95%"} flexWrap="wrap">
-                    {filterDecimals.map((i, key) => {
-                      return (
-                        <Flex mr={3} mb={2}>
-                          <IconButton
-                            size={"xs"}
-                            aria-label={"remove filter item"}
-                            icon={<HiMinus />}
-                            colorScheme="red"
-                            height={"100%"}
-                            onClick={() => {
-                              let array = [...filterDecimals];
-                              array.splice(key, 1);
-                              setFilterDecimals([...array]);
-                            }}
-                          />
-                          <NumberInput
-                            size={buttonSize}
-                            min={0}
-                            max={127}
-                            value={i}
-                            onChange={(e) => {
-                              let array = [...filterDecimals];
-                              array[key] = parseInt(e);
-                              setFilterDecimals([...array]);
-                            }}
-                            fontSize={["sm", "md", "lg"]}
-                            width="80px"
-                            key={key}
-                            allowMouseWheel
-                          >
-                            <NumberInputField />
-                            <NumberInputStepper>
-                              <NumberIncrementStepper />
-                              <NumberDecrementStepper />
-                            </NumberInputStepper>
-                          </NumberInput>
-                        </Flex>
-                      );
-                    })}
-                    <IconButton
-                      size={buttonSize}
-                      aria-label={"add filter item"}
-                      icon={<GrAdd />}
-                      onClick={() => setFilterDecimals((e) => [...e, 0])}
-                    />
-                  </Flex>
-                </FormControl>
-              </Box>
-            </>
+              <FormControl mt={5}>
+                <FormLabel>Decimals to filter out</FormLabel>
+                <Flex flexWrap="wrap" gap={4}>
+                  {filterDecimals.map((i, key) => (
+                    <Flex
+                      key={key}
+                      align="center"
+                      gap={2}
+                      borderRadius="xl"
+                      borderWidth="1px"
+                      borderColor="gray.200"
+                      bg="white"
+                      px={2}
+                      py={2}
+                    >
+                      <TouchNumberInput
+                        value={i}
+                        onChange={(v) => {
+                          const array = [...filterDecimals];
+                          array[key] = v;
+                          setFilterDecimals([...array]);
+                        }}
+                        min={0}
+                        max={127}
+                        width="190px"
+                      />
+                      <IconButton
+                        aria-label="remove filter item"
+                        icon={<FiTrash2 />}
+                        boxSize="52px"
+                        minW="52px"
+                        fontSize="20px"
+                        colorScheme="red"
+                        variant="ghost"
+                        onClick={() => {
+                          const array = [...filterDecimals];
+                          array.splice(key, 1);
+                          setFilterDecimals([...array]);
+                        }}
+                      />
+                    </Flex>
+                  ))}
+                  <Button
+                    leftIcon={<FiPlus />}
+                    variant="outline"
+                    colorScheme="brand"
+                    h="72px"
+                    borderRadius="xl"
+                    borderStyle="dashed"
+                    onClick={() => setFilterDecimals((e) => [...e, 0])}
+                  >
+                    Add
+                  </Button>
+                </Flex>
+              </FormControl>
+            </Box>
           ) : null}
         </ModalBody>
 
-        <ModalFooter>
+        <ModalFooter gap={3} flexWrap="wrap">
           {error === "" ? null : (
-            <Text
-              color="red"
-              fontSize={["12px", "14px", "16px"]}
-              fontWeight={"medium"}
-            >
+            <Text color="red.500" fontSize="md" fontWeight="semibold" mr="auto">
               {error}
             </Text>
           )}
+          <Button variant="outline" colorScheme="gray" size="lg" onClick={onClose}>
+            Cancel
+          </Button>
           <Button
-            colorScheme={"twitter"}
-            mr={3}
-            size={buttonSize}
+            colorScheme="brand"
+            size="lg"
+            leftIcon={<FiDownload />}
+            isDisabled={fileName === "" || filePath === ""}
             onClick={async () => {
               setLoading(true);
 
@@ -338,6 +328,7 @@ const ReceiveFileModal: React.FC<ReceiveFileModalProps> = ({
 
                 await store.save();
               } catch (_error) {
+                setLoading(false);
                 setError("Something went wrong, try again later");
                 return;
               }
@@ -357,22 +348,16 @@ const ReceiveFileModal: React.FC<ReceiveFileModalProps> = ({
               );
               setLoading(false);
               if (res === "oke") {
-                // go go go
                 setFileReceive(true);
                 setError("");
                 onClose();
               } else {
-                //show error
                 setError(res);
               }
             }}
             isLoading={loading}
           >
             Start file transfer
-          </Button>
-
-          <Button colorScheme="gray" onClick={onClose} size={buttonSize}>
-            Close
           </Button>
         </ModalFooter>
       </ModalContent>

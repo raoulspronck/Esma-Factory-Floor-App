@@ -9,7 +9,6 @@ import {
   PopoverContent,
   PopoverTrigger,
   Portal,
-  Spacer,
   Text,
 } from "@chakra-ui/react";
 import { invoke } from "@tauri-apps/api";
@@ -92,37 +91,39 @@ export default function ConnectionStatus() {
 
       {mqttStatus === "disconnected" ? (
         <Flex
-          width={["110px", "130px", "140px"]}
           alignItems="center"
-          justifyContent="center"
+          gap={2}
           backgroundColor="red.500"
-          height={["24px", "24px", "31px"]}
-          borderRadius="5px"
+          height="40px"
+          borderRadius="full"
+          px={5}
           fontSize="md"
           fontWeight="semibold"
-          ml={[1, 2, 3]}
+          ml={3}
         >
-          <Spacer />
-          <Icon as={MdWifiTetheringOff} />
-          <Spacer />
-          <Text>disconnected</Text>
-          <Spacer />
+          <Icon as={MdWifiTetheringOff} boxSize="20px" />
+          <Text>Disconnected</Text>
         </Flex>
       ) : (
         <Flex
-          width={["110px", "130px", "150px"]}
           alignItems="center"
-          justifyContent="center"
+          gap={2}
           backgroundColor="green.500"
-          height={["24px", "24px", "31px"]}
-          borderRadius="5px"
+          height="40px"
+          borderRadius="full"
+          px={5}
           fontSize="md"
           fontWeight="semibold"
-          ml={[1, 2, 3]}
+          ml={3}
         >
-          <Icon ml={3} as={MdWifiTethering} />
-          <Text ml={2}>connected</Text>
-          <Text ml="auto" mr={2}>{pingTime}s</Text>
+          <Icon as={MdWifiTethering} boxSize="20px" />
+          <Text>Connected</Text>
+          <Text
+            color="whiteAlpha.800"
+            sx={{ fontVariantNumeric: "tabular-nums" }}
+          >
+            {pingTime}s
+          </Text>
         </Flex>
       )}
     </Flex>

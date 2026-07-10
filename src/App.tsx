@@ -1,7 +1,7 @@
 import { animated, useSprings } from "@react-spring/web";
 import { useDrag } from "@use-gesture/react";
 import clamp from "lodash.clamp";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Flex } from "@chakra-ui/react";
 
 import ConfigurableDashboard from "./pages/ConfigurableDashboard";
@@ -24,6 +24,11 @@ function App() {
   const loadDashboard = useDashboardStore((s) => s.loadDashboard);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const rs232Error = useConnectionStore((s) => s.rs232Error);
+  const fileSend = useConnectionStore((s) => s.fileSend);
+  const fileReceive = useConnectionStore((s) => s.fileReceive);
+
+  // Which swipe page is visible: 0 = dashboard, 1 = RS232 monitor.
+  const [activePage, setActivePage] = useState(0);
 
   const { height } = useWindowSize();
   const initialized = useRef(false);
@@ -44,7 +49,7 @@ function App() {
     <Flex
       height="100vh"
       width="100vw"
-      bgColor="gray.50"
+      bgColor="gray.100"
       flexDir="column"
       position="relative"
       color="gray.800"
@@ -58,10 +63,13 @@ function App() {
       <div className="flex fill center">
         <Viewpager
           pages={[<ConfigurableDashboard />, <RS232Monitor />]}
+          onPageChange={setActivePage}
         />
       </div>
 
-      {rs232Error && (
+      {/* COM-port errors are only relevant on the RS232 monitor page; during a
+          file transfer they surface in the transfer status bar instead. */}
+      {rs232Error && activePage === 1 && !fileSend && !fileReceive && (
         <Flex
           width="100%"
           height="70px"
@@ -91,9 +99,10 @@ function App() {
 
 interface ViewpagerProps {
   pages: React.ReactNode[];
+  onPageChange?: (page: number) => void;
 }
 
-const Viewpager: React.FC<ViewpagerProps> = ({ pages }) => {
+const Viewpager: React.FC<ViewpagerProps> = ({ pages, onPageChange }) => {
   const index = useRef(0);
   const width = window.innerWidth;
 
@@ -106,6 +115,7 @@ const Viewpager: React.FC<ViewpagerProps> = ({ pages }) => {
   const bind: any = useDrag(({ active, movement: [mx], direction: [xDir], cancel }) => {
     if (active && Math.abs(mx) > width / 4) {
       index.current = clamp(index.current + (xDir > 0 ? -1 : 1), 0, pages.length - 1);
+      onPageChange?.(index.current);
       cancel();
     }
     api.start((i) => {

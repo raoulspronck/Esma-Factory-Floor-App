@@ -5,10 +5,8 @@ import {
   Icon,
   LightMode,
   Progress,
-  Spacer,
   Spinner,
   Text,
-  useBreakpointValue,
 } from "@chakra-ui/react";
 import { invoke } from "@tauri-apps/api";
 import React from "react";
@@ -23,104 +21,82 @@ interface SendFileTaskBarProps {
   setFileSend: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
+const StatusChip: React.FC<{
+  color: string;
+  icon: React.ReactElement;
+  label: string;
+}> = ({ color, icon, label }) => (
+  <Flex
+    alignItems="center"
+    gap={2}
+    backgroundColor={color}
+    height="40px"
+    borderRadius="full"
+    px={5}
+    fontSize="md"
+    fontWeight="semibold"
+    ml={3}
+    flexShrink={0}
+  >
+    {icon}
+    <Text>{label}</Text>
+  </Flex>
+);
+
 const SendFileTaskBar: React.FC<SendFileTaskBarProps> = ({
   error,
   fileSendProgress,
   fileSendStatus,
   setFileSend,
 }) => {
-  const buttonSize = useBreakpointValue(["xs", "xs", "sm"]);
+  const sent = parseInt(fileSendProgress.split("/")[0]);
+  const total = parseInt(fileSendProgress.split("/")[1]);
 
   return (
     <Flex
-      height={["35px", "40px", "50px"]}
+      height="64px"
       alignItems="center"
-      bgColor={"#5c5c5c"}
+      bgColor="gray.700"
       color="white"
-      pl={[2, 3]}
-      borderBottom={"1px solid"}
-      borderColor="blackAlpha.900"
+      pl={4}
+      borderBottom="1px solid"
+      borderColor="blackAlpha.500"
     >
-      <Text fontSize={["12px", "12px", "15px"]} fontWeight="medium">
+      <Text fontSize="md" fontWeight="medium" color="whiteAlpha.800">
         Status:
       </Text>
 
       {error === "" ? (
         fileSendStatus === "Send completed" ? (
-          <Flex
-            width={["150px", "160px", "180px"]}
-            alignItems="center"
-            justifyContent={"center"}
-            backgroundColor="green.500"
-            height={["24px", "24px", "31px"]}
-            borderRadius="5px"
-            fontSize={buttonSize}
-            fontWeight="semibold"
-            ml={[1, 2, 3]}
-          >
-            <Spacer />
-            <Icon as={AiFillCheckCircle} />
-            <Spacer />
-            <Text>Transfer completed</Text>
-            <Spacer />
-          </Flex>
+          <StatusChip
+            color="green.500"
+            icon={<Icon as={AiFillCheckCircle} boxSize="20px" />}
+            label="Transfer completed"
+          />
         ) : fileSendStatus === "Started transfer" ? (
           <>
-            <Flex
-              width={["95px", "100px", "110px"]}
-              alignItems="center"
-              justifyContent={"center"}
-              backgroundColor="twitter.500"
-              height={["24px", "24px", "31px"]}
-              borderRadius="5px"
-              fontSize={buttonSize}
-              fontWeight="semibold"
-              ml={[1, 2, 3]}
-            >
-              <Spacer />
-              <Icon as={BsFileEarmarkBreak} />
-              <Spacer />
-              <Text>Sending</Text>
-              <Spacer />
-            </Flex>
+            <StatusChip
+              color="brand.500"
+              icon={<Icon as={BsFileEarmarkBreak} boxSize="18px" />}
+              label="Sending"
+            />
 
             {fileSendProgress !== "" ? (
               <>
-                <Box
-                  mr={[1, 2]}
-                  ml={[1, 2]}
-                  height={["60%", "70%", "80%"]}
-                  width={"2px"}
-                  backgroundColor={"blackAlpha.400"}
-                />
+                <Box mx={4} height="60%" width="2px" backgroundColor="whiteAlpha.300" />
 
-                <Text fontSize={["12px", "12px", "15px"]} fontWeight="medium">
-                  Progress:
-                </Text>
-
-                <Box
-                  ml={[1, 2, 3]}
-                  minWidth={`${
-                    fileSendProgress.split("/")[1]
-                      ? fileSendProgress.split("/")[1].length * 6 * 2 + 40
-                      : 0
-                  }px   `}
-                >
-                  <Text fontSize={["12px", "12px", "15px"]} fontWeight="medium">
-                    {fileSendProgress.split("/")[0]} /
-                    {fileSendProgress.split("/")[1]} bytes
+                <Box minW="220px">
+                  <Text fontSize="md" fontWeight="medium">
+                    {fileSendProgress.split("/")[0]} / {fileSendProgress.split("/")[1]} bytes
                   </Text>
 
                   <Progress
-                    size={buttonSize}
                     hasStripe
-                    value={
-                      (parseInt(fileSendProgress.split("/")[0]) /
-                        parseInt(fileSendProgress.split("/")[1])) *
-                      100
-                    }
-                    height={"2px"}
-                    color="twitter.500"
+                    value={(sent / total) * 100}
+                    height="8px"
+                    borderRadius="full"
+                    colorScheme="brand"
+                    bg="whiteAlpha.300"
                     mt={1}
                   />
                 </Box>
@@ -128,66 +104,30 @@ const SendFileTaskBar: React.FC<SendFileTaskBarProps> = ({
             ) : null}
           </>
         ) : fileSendStatus === "Pauzed" ? (
-          <Flex
-            width={["90px", "100px", "110px"]}
-            alignItems="center"
-            justifyContent={"center"}
-            backgroundColor="twitter.500"
-            height={["24px", "24px", "31px"]}
-            borderRadius="5px"
-            fontSize={buttonSize}
-            fontWeight="semibold"
-            ml={[1, 2, 3]}
-          >
-            <Spacer />
-            <Icon as={Spinner} />
-            <Spacer />
-            <Text>Pauzed</Text>
-            <Spacer />
-          </Flex>
+          <StatusChip
+            color="orange.500"
+            icon={<Spinner size="sm" />}
+            label="Pauzed"
+          />
         ) : (
-          <Flex
-            width={["90px", "100px", "110px"]}
-            alignItems="center"
-            justifyContent={"center"}
-            backgroundColor="twitter.500"
-            height={["24px", "24px", "31px"]}
-            borderRadius="5px"
-            fontSize={buttonSize}
-            fontWeight="semibold"
-            ml={[1, 2, 3]}
-          >
-            <Spacer />
-            <Icon as={Spinner} />
-            <Spacer />
-            <Text>Starting up</Text>
-            <Spacer />
-          </Flex>
+          <StatusChip
+            color="brand.500"
+            icon={<Spinner size="sm" />}
+            label="Starting up"
+          />
         )
       ) : (
-        <Flex
-          width={"fit-content"}
-          pl={2}
-          pr={2}
-          alignItems="center"
-          justifyContent={"center"}
-          backgroundColor="red.500"
-          height={["24px", "24px", "31px"]}
-          borderRadius="5px"
-          fontSize={buttonSize}
-          fontWeight="semibold"
-          ml={[1, 2, 3]}
-        >
-          <Icon as={MdError} />
-          <Text ml="1">Error:</Text>
-          <Text ml="2">{error}</Text>
-        </Flex>
+        <StatusChip
+          color="red.500"
+          icon={<Icon as={MdError} boxSize="20px" />}
+          label={`Error: ${error}`}
+        />
       )}
       <LightMode>
         <Button
-          ml={"auto"}
-          mr={"3"}
-          size={buttonSize}
+          ml="auto"
+          mr={3}
+          size="md"
           colorScheme="red"
           onClick={() => {
             invoke("stop_file_send", {})

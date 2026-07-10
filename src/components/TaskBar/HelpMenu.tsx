@@ -22,23 +22,36 @@ export default function HelpMenu() {
   }, []);
 
   return (
-    <Menu closeOnSelect={false} gutter={5}>
+    <Menu closeOnSelect={false} gutter={8}>
       <MenuButton
-        borderRadius="5px"
-        ml={3}
-        width="55px"
-        justifyContent="center"
-        bgColor="twitter.400"
-        _expanded={{ bg: "twitter.500" }}
-        height="40px"
+        borderRadius="xl"
+        ml={2}
+        height="52px"
+        px={5}
+        fontSize="lg"
+        fontWeight="semibold"
+        color="white"
+        bg="whiteAlpha.200"
+        _hover={{ bg: "whiteAlpha.300" }}
+        _expanded={{ bg: "whiteAlpha.400" }}
+        transition="background 0.15s ease"
       >
         Help
       </MenuButton>
-      <MenuList minWidth="240px" bgColor="twitter.400">
-        <MenuItem onClick={onOpen} bgColor="twitter.400" _hover={{ bg: "twitter.500" }}>
-          <Flex alignItems="center" width="100%">
-            <Icon as={MdError} />
-            <Text ml={2}>View logs</Text>
+      <MenuList>
+        <MenuItem onClick={onOpen} minH="60px">
+          <Flex alignItems="center" width="100%" gap={3}>
+            <Flex
+              boxSize="40px"
+              borderRadius="lg"
+              bg="brand.50"
+              color="brand.600"
+              align="center"
+              justify="center"
+            >
+              <Icon as={MdError} boxSize="22px" />
+            </Flex>
+            <Text>View logs</Text>
           </Flex>
         </MenuItem>
         <ErrorLog

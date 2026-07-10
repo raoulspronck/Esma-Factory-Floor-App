@@ -3,6 +3,8 @@ import { invoke } from "@tauri-apps/api";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef } from "react";
 import { BiExport, BiImport } from "react-icons/bi";
+import { BsChevronDown } from "react-icons/bs";
+import { FiFolder } from "react-icons/fi";
 
 import ReceiveFileModal from "../FileMenu/receiveFileModel";
 import SendFileModal from "../FileMenu/sendFileModal";
@@ -56,22 +58,40 @@ export default function FileMenu() {
     );
 
   return (
-    <Menu gutter={5}>
+    <Menu gutter={8}>
       <MenuButton
-        borderRadius="5px"
-        width="50px"
-        justifyContent="center"
-        bgColor="twitter.400"
-        _expanded={{ bg: "twitter.500" }}
-        height="40px"
+        borderRadius="xl"
+        height="52px"
+        px={5}
+        fontSize="lg"
+        fontWeight="semibold"
+        bgColor="brand.500"
+        color="white"
+        _hover={{ bg: "brand.400" }}
+        _expanded={{ bg: "brand.600" }}
+        _active={{ bg: "brand.600" }}
+        transition="background 0.15s ease"
       >
-        File
+        <Flex alignItems="center" gap={2}>
+          <Icon as={FiFolder} boxSize="22px" />
+          <Text>File</Text>
+          <Icon as={BsChevronDown} boxSize="14px" />
+        </Flex>
       </MenuButton>
-      <MenuList ml={-1} bgColor="twitter.400" border="none">
-        <MenuItem onClick={onOpenSend} bgColor="twitter.400" _hover={{ bg: "twitter.500" }}>
-          <Flex alignItems="center" width="100%">
-            <Icon as={BiExport} />
-            <Text ml={2}>Send file</Text>
+      <MenuList>
+        <MenuItem onClick={onOpenSend} minH="60px">
+          <Flex alignItems="center" width="100%" gap={3}>
+            <Flex
+              boxSize="40px"
+              borderRadius="lg"
+              bg="brand.50"
+              color="brand.600"
+              align="center"
+              justify="center"
+            >
+              <Icon as={BiExport} boxSize="22px" />
+            </Flex>
+            <Text>Send file</Text>
           </Flex>
         </MenuItem>
         <SendFileModal
@@ -80,10 +100,19 @@ export default function FileMenu() {
           StartFileSending={startFileSending}
           setFileSend={setFileSend as any}
         />
-        <MenuItem onClick={onOpenReceive} bgColor="twitter.400" _hover={{ bg: "twitter.500" }}>
-          <Flex alignItems="center" width="100%">
-            <Icon as={BiImport} />
-            <Text ml={2}>Receive file</Text>
+        <MenuItem onClick={onOpenReceive} minH="60px">
+          <Flex alignItems="center" width="100%" gap={3}>
+            <Flex
+              boxSize="40px"
+              borderRadius="lg"
+              bg="brand.50"
+              color="brand.600"
+              align="center"
+              justify="center"
+            >
+              <Icon as={BiImport} boxSize="22px" />
+            </Flex>
+            <Text>Receive file</Text>
           </Flex>
         </MenuItem>
         <ReceiveFileModal

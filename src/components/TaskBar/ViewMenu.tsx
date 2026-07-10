@@ -1,6 +1,6 @@
 import { Flex, Icon, Menu, MenuButton, MenuItem, MenuList, Text, useDisclosure } from "@chakra-ui/react";
 import { invoke } from "@tauri-apps/api";
-import { useEffect, useRef } from "react";
+import { ElementType, useEffect, useRef } from "react";
 import { MdAddToQueue } from "react-icons/md";
 import { TbExchange, TbRefreshAlert } from "react-icons/tb";
 
@@ -37,31 +37,48 @@ export default function ViewMenu() {
     setDashboard(resolved);
   };
 
+  const itemIcon = (icon: ElementType) => (
+    <Flex
+      boxSize="40px"
+      borderRadius="lg"
+      bg="brand.50"
+      color="brand.600"
+      align="center"
+      justify="center"
+    >
+      <Icon as={icon} boxSize="22px" />
+    </Flex>
+  );
+
   return (
-    <Menu closeOnSelect={false} gutter={5}>
+    <Menu closeOnSelect={false} gutter={8}>
       <MenuButton
-        borderRadius="5px"
-        ml={3}
-        width="55px"
-        justifyContent="center"
-        bgColor="twitter.400"
-        _expanded={{ bg: "twitter.500" }}
-        height="40px"
+        borderRadius="xl"
+        ml={2}
+        height="52px"
+        px={5}
+        fontSize="lg"
+        fontWeight="semibold"
+        color="white"
+        bg="whiteAlpha.200"
+        _hover={{ bg: "whiteAlpha.300" }}
+        _expanded={{ bg: "whiteAlpha.400" }}
+        transition="background 0.15s ease"
       >
         View
       </MenuButton>
-      <MenuList minWidth="240px" bgColor="twitter.400">
-        <MenuItem onClick={() => setLayoutChangable(true)} bgColor="twitter.400" _hover={{ bg: "twitter.500" }}>
-          <Flex alignItems="center" width="100%">
-            <Icon as={TbExchange} />
-            <Text ml={2}>Change layout</Text>
+      <MenuList>
+        <MenuItem onClick={() => setLayoutChangable(true)} minH="60px">
+          <Flex alignItems="center" width="100%" gap={3}>
+            {itemIcon(TbExchange)}
+            <Text>Change layout</Text>
           </Flex>
         </MenuItem>
 
-        <MenuItem onClick={onOpenAddDevice} bgColor="twitter.400" _hover={{ bg: "twitter.500" }}>
-          <Flex alignItems="center" width="100%">
-            <Icon as={MdAddToQueue} />
-            <Text ml={2}>Add device</Text>
+        <MenuItem onClick={onOpenAddDevice} minH="60px">
+          <Flex alignItems="center" width="100%" gap={3}>
+            {itemIcon(MdAddToQueue)}
+            <Text>Add device</Text>
           </Flex>
         </MenuItem>
         <AddDeviceModal
@@ -71,10 +88,10 @@ export default function ViewMenu() {
           dashboard={dashboard as any}
         />
 
-        <MenuItem onClick={onOpenManageAlerts} bgColor="twitter.400" _hover={{ bg: "twitter.500" }}>
-          <Flex alignItems="center" width="100%">
-            <Icon as={TbRefreshAlert} />
-            <Text ml={2}>Manage alerts</Text>
+        <MenuItem onClick={onOpenManageAlerts} minH="60px">
+          <Flex alignItems="center" width="100%" gap={3}>
+            {itemIcon(TbRefreshAlert)}
+            <Text>Manage alerts</Text>
           </Flex>
         </MenuItem>
         <ManageAlertsModal

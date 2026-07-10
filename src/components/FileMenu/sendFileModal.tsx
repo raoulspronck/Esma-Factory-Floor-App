@@ -6,9 +6,6 @@ import {
   FormControl,
   FormLabel,
   Icon,
-  Input,
-  InputGroup,
-  InputRightAddon,
   Modal,
   ModalBody,
   ModalCloseButton,
@@ -16,20 +13,17 @@ import {
   ModalFooter,
   ModalHeader,
   ModalOverlay,
-  NumberDecrementStepper,
-  NumberIncrementStepper,
-  NumberInput,
-  NumberInputField,
-  NumberInputStepper,
   Text,
   useBreakpointValue,
 } from "@chakra-ui/react";
 import * as Dialog from "@tauri-apps/api/dialog";
 import React, { useEffect, useState } from "react";
 import { BsChevronDown, BsChevronRight } from "react-icons/bs";
-import { GoFileDirectory } from "react-icons/go";
+import { FiFile, FiFolder, FiSend } from "react-icons/fi";
 import { Store } from "tauri-plugin-store-api";
 import { readTextFile } from "@tauri-apps/api/fs";
+
+import TouchNumberInput from "../ui/TouchNumberInput";
 
 interface SendFileModalProps {
   isOpen: boolean;
@@ -53,12 +47,10 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
   setFileSend,
 }) => {
   const [filePathFile, setFilePathFile] = useState("");
-  const modalSize = useBreakpointValue(["sm", "lg", "2xl"]);
-  const buttonSize = useBreakpointValue(["sm", "md", "lg"]);
+  const modalSize = useBreakpointValue(["lg", "2xl", "3xl"]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [advanceSettings, setAdvanceSettings] = useState(false);
-  const [readFile, setReadFile] = useState(false);
 
   const [enableBreaks, setEnableBreaks] = useState(0);
   const [maxChar, setMaxChar] = useState(5000);
@@ -68,10 +60,23 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
   const [stop, setStop] = useState(19);
   const [resume, setResume] = useState(17);
 
-  const [fileFirst3Lines, setFileFirst3Lines] = useState([""]);
+  const [filePreviewLines, setFilePreviewLines] = useState([""]);
 
   useEffect(() => {
     const store = new Store(".settings.dat");
+
+    const loadInt = (key: string, set: (v: number) => void) => {
+      store
+        .get(key)
+        .then((e: any) =>
+          typeof e === "string"
+            ? set(parseInt(e))
+            : e === null
+            ? null
+            : set(parseInt(JSON.stringify(e)))
+        )
+        .catch((_e: any) => null);
+    };
 
     store
       .get("sendFilePath")
@@ -84,71 +89,12 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
       )
       .catch((_e: any) => null);
 
-    store
-      .get("enableBreaks")
-      .then((e: any) =>
-        typeof e === "string"
-          ? setEnableBreaks(parseInt(e))
-          : e === null
-          ? null
-          : setEnableBreaks(parseInt(JSON.stringify(e)))
-      )
-      .catch((_e: any) => null);
-
-    store
-      .get("maxChar")
-      .then((e: any) =>
-        typeof e === "string"
-          ? setMaxChar(parseInt(e))
-          : e === null
-          ? null
-          : setMaxChar(parseInt(JSON.stringify(e)))
-      )
-      .catch((_e: any) => null);
-
-    store
-      .get("delay")
-      .then((e: any) =>
-        typeof e === "string"
-          ? setDelay(parseInt(e))
-          : e === null
-          ? null
-          : setDelay(parseInt(JSON.stringify(e)))
-      )
-      .catch((_e: any) => null);
-
-    store
-      .get("softwareBreaks")
-      .then((e: any) =>
-        typeof e === "string"
-          ? setSoftwareBreaks(parseInt(e))
-          : e === null
-          ? null
-          : setSoftwareBreaks(parseInt(JSON.stringify(e)))
-      )
-      .catch((_e: any) => null);
-
-    store
-      .get("stop")
-      .then((e: any) =>
-        typeof e === "string"
-          ? setStop(parseInt(e))
-          : e === null
-          ? null
-          : setStop(parseInt(JSON.stringify(e)))
-      )
-      .catch((_e: any) => null);
-
-    store
-      .get("resume")
-      .then((e: any) =>
-        typeof e === "string"
-          ? setResume(parseInt(e))
-          : e === null
-          ? null
-          : setResume(parseInt(JSON.stringify(e)))
-      )
-      .catch((_e: any) => null);
+    loadInt("enableBreaks", setEnableBreaks);
+    loadInt("maxChar", setMaxChar);
+    loadInt("delay", setDelay);
+    loadInt("softwareBreaks", setSoftwareBreaks);
+    loadInt("stop", setStop);
+    loadInt("resume", setResume);
   }, []);
 
   useEffect(() => {
@@ -156,260 +102,227 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
       if (filePathFile !== "") {
         try {
           const content = await readTextFile(filePathFile);
-          console.log(content);
           const lines = content.split(/\r?\n/);
-          setFileFirst3Lines(lines);
+          setFilePreviewLines(lines);
         } catch (err) {
-          setFileFirst3Lines(["⚠️ Unable to read file"]);
+          setFilePreviewLines(["⚠️ Unable to read file"]);
         }
       } else {
-        setFileFirst3Lines([""]);
+        setFilePreviewLines([""]);
       }
     };
 
     loadFilePreview();
   }, [filePathFile]);
 
+  const pickFile = () => {
+    Dialog.open({
+      defaultPath: "\\\\ESMA-AD\\Public2\\CNC_PROGRAMMAAS+MEET\\CNC FREES",
+      directory: false,
+      multiple: false,
+      filters: [
+        {
+          name: ".txt",
+          extensions: ["txt"],
+        },
+      ],
+    })
+      .then((e) => {
+        if (e !== null) {
+          setFilePathFile(e as string);
+        }
+      })
+      .catch((e) => console.log("error", e));
+  };
+
+  const fileName = filePathFile.split(/[\\/]/).pop() ?? "";
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} size={modalSize}>
-      <ModalOverlay />
+      <ModalOverlay bg="blackAlpha.700" />
       <ModalContent>
-        <ModalHeader fontSize={["17px", "19px", "22px"]} mt={[-2, -2, -1]}>
-          Send file
-        </ModalHeader>
-        <ModalCloseButton size={buttonSize} />
+        <ModalHeader>Send file</ModalHeader>
+        <ModalCloseButton />
         <ModalBody>
-          <Box mt={[-2, 0, 2]}>
-            <FormControl fontSize={["sm", "md", "lg"]}>
-              <Flex alignItems="center">
-                <FormLabel fontSize={["sm", "md", "lg"]}>
-                  Select file to transfer
-                </FormLabel>
+          {/* One large tap target to pick the file */}
+          <FormControl>
+            <FormLabel>File to transfer</FormLabel>
+            <Flex
+              as="button"
+              onClick={pickFile}
+              width="100%"
+              minH="84px"
+              align="center"
+              px={5}
+              gap={4}
+              borderRadius="2xl"
+              borderWidth="2px"
+              borderStyle={filePathFile === "" ? "dashed" : "solid"}
+              borderColor={filePathFile === "" ? "gray.300" : "brand.500"}
+              bg={filePathFile === "" ? "gray.50" : "brand.50"}
+              _hover={{ borderColor: "brand.500", bg: "brand.50" }}
+              _active={{ bg: "brand.100" }}
+              transition="all 0.15s ease"
+              textAlign="left"
+            >
+              <Flex
+                boxSize="52px"
+                borderRadius="xl"
+                bg={filePathFile === "" ? "gray.200" : "brand.500"}
+                color={filePathFile === "" ? "gray.600" : "white"}
+                align="center"
+                justify="center"
+                flexShrink={0}
+              >
+                <Icon as={filePathFile === "" ? FiFolder : FiFile} boxSize="26px" />
               </Flex>
-
-              <InputGroup size={buttonSize}>
-                <Input
-                  fontSize={["sm", "md", "lg"]}
-                  readOnly
-                  value={filePathFile}
-                />
-                <InputRightAddon
-                  cursor="pointer"
-                  onClick={() => {
-                    Dialog.open({
-                      defaultPath:
-                        "\\\\ESMA-AD\\Public2\\CNC_PROGRAMMAAS+MEET\\CNC FREES",
-                      directory: false,
-                      multiple: false,
-                      filters: [
-                        {
-                          name: ".txt",
-                          extensions: ["txt"],
-                        },
-                      ],
-                    })
-                      .then((e) => {
-                        if (e !== null) {
-                          const pathToFile = e as string;
-
-                          setFilePathFile(pathToFile);
-                        }
-                      })
-                      .catch((e) => console.log("error", e));
-                  }}
-                  children={<Icon as={GoFileDirectory} />}
-                />
-              </InputGroup>
-            </FormControl>
-          </Box>
+              {filePathFile === "" ? (
+                <Text fontSize="lg" fontWeight="medium" color="gray.600">
+                  Tap to choose a file…
+                </Text>
+              ) : (
+                <Box overflow="hidden">
+                  <Text fontSize="lg" fontWeight="bold" noOfLines={1}>
+                    {fileName}
+                  </Text>
+                  <Text fontSize="sm" color="gray.500" noOfLines={1}>
+                    {filePathFile}
+                  </Text>
+                </Box>
+              )}
+            </Flex>
+          </FormControl>
 
           {filePathFile !== "" ? (
-            <>
-              <Flex
-                alignItems={"center"}
-                width="fit-content"
-                mt={2}
-                cursor="pointer"
-                onClick={() => setReadFile((e) => !e)}
+            <Box mt={5}>
+              <Text fontSize="md" fontWeight="semibold" color="gray.600" mb={2}>
+                File preview
+              </Text>
+              <Box
+                maxH="180px"
+                overflowY="auto"
+                bg="gray.900"
+                color="green.200"
+                fontFamily="mono"
+                fontSize="sm"
+                borderRadius="xl"
+                px={4}
+                py={3}
               >
-                <Text fontSize={["12px", "14px", "16px"]} fontWeight="medium">
-                  First 5 lines of file
-                </Text>
-              </Flex>
-
-              <Box maxH={"200px"} overflowY={"scroll"}>
-                {fileFirst3Lines.map((e, key) => (
-                  <Text key={key}>{e}</Text>
+                {filePreviewLines.map((e, key) => (
+                  <Text key={key} whiteSpace="pre-wrap">
+                    {e}
+                  </Text>
                 ))}
               </Box>
-            </>
+            </Box>
           ) : null}
 
-          <Flex
-            alignItems={"center"}
-            width="fit-content"
-            mt={2}
-            cursor="pointer"
+          <Button
+            variant="ghost"
+            colorScheme="brand"
+            mt={5}
+            leftIcon={
+              <Icon as={advanceSettings ? BsChevronDown : BsChevronRight} />
+            }
             onClick={() => setAdvanceSettings((e) => !e)}
           >
-            {advanceSettings ? (
-              <Icon as={BsChevronDown} fontSize={["12px", "14px", "16px"]} />
-            ) : (
-              <Icon as={BsChevronRight} fontSize={["12px", "14px", "16px"]} />
-            )}
-
-            <Text fontSize={["12px", "14px", "16px"]} fontWeight="medium">
-              Advance settings
-            </Text>
-          </Flex>
+            Advanced settings
+          </Button>
 
           {advanceSettings ? (
-            <>
-              <Box mt={3}>
-                <FormControl>
-                  <Checkbox
-                    isChecked={softwareBreaks === 1}
-                    onChange={(i) => {
-                      setSoftwareBreaks((e) => (e === 0 ? 1 : 0));
-                    }}
-                    size={buttonSize}
-                  >
-                    <FormLabel fontSize={["sm", "md", "lg"]} mt={1}>
-                      Luister naar CNC
-                    </FormLabel>
-                  </Checkbox>
-                </FormControl>
-              </Box>
+            <Box
+              mt={3}
+              borderRadius="2xl"
+              borderWidth="1px"
+              borderColor="gray.200"
+              bg="gray.50"
+              px={5}
+              py={5}
+            >
+              <Checkbox
+                isChecked={softwareBreaks === 1}
+                onChange={() => setSoftwareBreaks((e) => (e === 0 ? 1 : 0))}
+              >
+                <Text fontSize="lg" fontWeight="medium" ml={1}>
+                  Luister naar CNC
+                </Text>
+              </Checkbox>
 
               {softwareBreaks === 1 ? (
-                <Flex mt={3}>
-                  <Box mr={2}>
-                    <FormControl>
-                      <FormLabel fontSize={["sm", "md", "lg"]}>Stop</FormLabel>
-
-                      <NumberInput
-                        size={buttonSize}
-                        min={0}
-                        value={stop}
-                        onChange={(e) => setStop(parseInt(e))}
-                        fontSize={["sm", "md", "lg"]}
-                      >
-                        <NumberInputField />
-                        <NumberInputStepper>
-                          <NumberIncrementStepper />
-                          <NumberDecrementStepper />
-                        </NumberInputStepper>
-                      </NumberInput>
-                    </FormControl>
-                  </Box>
-
-                  <Box ml={2}>
-                    <FormControl>
-                      <FormLabel fontSize={["sm", "md", "lg"]}>
-                        Hervat
-                      </FormLabel>
-
-                      <NumberInput
-                        size={buttonSize}
-                        min={0}
-                        max={127}
-                        value={resume}
-                        onChange={(e) => setResume(parseInt(e))}
-                        fontSize={["sm", "md", "lg"]}
-                      >
-                        <NumberInputField />
-                        <NumberInputStepper>
-                          <NumberIncrementStepper />
-                          <NumberDecrementStepper />
-                        </NumberInputStepper>
-                      </NumberInput>
-                    </FormControl>
-                  </Box>
+                <Flex mt={4} gap={6} flexWrap="wrap">
+                  <FormControl width="fit-content">
+                    <FormLabel>Stop</FormLabel>
+                    <TouchNumberInput
+                      value={stop}
+                      onChange={setStop}
+                      min={0}
+                      max={127}
+                    />
+                  </FormControl>
+                  <FormControl width="fit-content">
+                    <FormLabel>Hervat</FormLabel>
+                    <TouchNumberInput
+                      value={resume}
+                      onChange={setResume}
+                      min={0}
+                      max={127}
+                    />
+                  </FormControl>
                 </Flex>
               ) : null}
-              <Box mt={3}>
-                <FormControl>
-                  <Checkbox
-                    isChecked={enableBreaks === 1}
-                    onChange={(i) => {
-                      setEnableBreaks((e) => (e === 0 ? 1 : 0));
-                    }}
-                    size={buttonSize}
-                  >
-                    <FormLabel fontSize={["sm", "md", "lg"]} mt={1}>
-                      Verstuur in delen
-                    </FormLabel>
-                  </Checkbox>
-                </FormControl>
+
+              <Box mt={5}>
+                <Checkbox
+                  isChecked={enableBreaks === 1}
+                  onChange={() => setEnableBreaks((e) => (e === 0 ? 1 : 0))}
+                >
+                  <Text fontSize="lg" fontWeight="medium" ml={1}>
+                    Verstuur in delen
+                  </Text>
+                </Checkbox>
               </Box>
 
               {enableBreaks === 1 ? (
-                <Flex mt={3}>
-                  <Box mr={2}>
-                    <FormControl>
-                      <FormLabel fontSize={["sm", "md", "lg"]}>
-                        Max characters
-                      </FormLabel>
-
-                      <NumberInput
-                        size={buttonSize}
-                        min={0}
-                        value={maxChar}
-                        onChange={(e) => setMaxChar(parseInt(e))}
-                        fontSize={["sm", "md", "lg"]}
-                      >
-                        <NumberInputField />
-                        <NumberInputStepper>
-                          <NumberIncrementStepper />
-                          <NumberDecrementStepper />
-                        </NumberInputStepper>
-                      </NumberInput>
-                    </FormControl>
-                  </Box>
-
-                  <Box ml={2}>
-                    <FormControl>
-                      <FormLabel fontSize={["sm", "md", "lg"]}>
-                        Wachttijd
-                      </FormLabel>
-
-                      <NumberInput
-                        size={buttonSize}
-                        min={0}
-                        max={127}
-                        value={delay}
-                        onChange={(e) => setDelay(parseInt(e))}
-                        fontSize={["sm", "md", "lg"]}
-                      >
-                        <NumberInputField />
-                        <NumberInputStepper>
-                          <NumberIncrementStepper />
-                          <NumberDecrementStepper />
-                        </NumberInputStepper>
-                      </NumberInput>
-                    </FormControl>
-                  </Box>
+                <Flex mt={4} gap={6} flexWrap="wrap">
+                  <FormControl width="fit-content">
+                    <FormLabel>Max characters</FormLabel>
+                    <TouchNumberInput
+                      value={maxChar}
+                      onChange={setMaxChar}
+                      min={0}
+                      step={500}
+                    />
+                  </FormControl>
+                  <FormControl width="fit-content">
+                    <FormLabel>Wachttijd (ms)</FormLabel>
+                    <TouchNumberInput
+                      value={delay}
+                      onChange={setDelay}
+                      min={0}
+                      step={100}
+                    />
+                  </FormControl>
                 </Flex>
               ) : null}
-            </>
+            </Box>
           ) : null}
         </ModalBody>
 
-        <ModalFooter>
+        <ModalFooter gap={3} flexWrap="wrap">
           {error === "" ? null : (
-            <Text
-              color="red"
-              fontSize={["12px", "14px", "16px"]}
-              fontWeight={"medium"}
-            >
+            <Text color="red.500" fontSize="md" fontWeight="semibold" mr="auto">
               {error}
             </Text>
           )}
+          <Button variant="outline" colorScheme="gray" size="lg" onClick={onClose}>
+            Cancel
+          </Button>
           <Button
-            colorScheme={"twitter"}
-            ml="auto"
-            mr={3}
-            size={buttonSize}
+            colorScheme="brand"
+            size="lg"
+            leftIcon={<FiSend />}
+            isDisabled={filePathFile === ""}
             onClick={async () => {
               setLoading(true);
 
@@ -425,6 +338,7 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
 
                 await store.save();
               } catch (_error) {
+                setLoading(false);
                 setError("Something went wrong, try again later");
                 return;
               }
@@ -439,22 +353,16 @@ const SendFileModal: React.FC<SendFileModalProps> = ({
               );
               setLoading(false);
               if (res === "oke") {
-                // go go go
                 setFileSend(true);
                 setError("");
                 onClose();
               } else {
-                //show error
                 setError(res);
               }
             }}
             isLoading={loading}
           >
             Start file transfer
-          </Button>
-
-          <Button colorScheme="gray" onClick={onClose} size={buttonSize}>
-            Close
           </Button>
         </ModalFooter>
       </ModalContent>

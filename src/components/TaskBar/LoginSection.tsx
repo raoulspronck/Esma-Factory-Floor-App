@@ -20,12 +20,15 @@ export default function LoginSection() {
         <ViewMenu />
         <HelpMenu />
         <Button
-          fontWeight="light"
-          ml="2"
-          bgColor="twitter.400"
-          _expanded={{ bg: "twitter.500" }}
-          onClick={() => setLogin(false)}
+          ml={2}
+          height="52px"
+          px={5}
+          fontSize="lg"
           color="white"
+          bg="whiteAlpha.200"
+          _hover={{ bg: "whiteAlpha.300" }}
+          _active={{ bg: "whiteAlpha.400" }}
+          onClick={() => setLogin(false)}
         >
           Logout
         </Button>
@@ -36,12 +39,15 @@ export default function LoginSection() {
   return (
     <Flex width="250px">
       <Button
-        bgColor="twitter.400"
-        _expanded={{ bg: "twitter.500" }}
-        fontWeight="light"
-        ml="2"
-        onClick={onOpen}
+        ml={2}
+        height="52px"
+        px={5}
+        fontSize="lg"
         color="white"
+        bg="whiteAlpha.200"
+        _hover={{ bg: "whiteAlpha.300" }}
+        _active={{ bg: "whiteAlpha.400" }}
+        onClick={onOpen}
       >
         Login
       </Button>

@@ -7,10 +7,8 @@ import {
   Icon,
   LightMode,
   Progress,
-  Spacer,
   Spinner,
   Text,
-  useBreakpointValue,
 } from "@chakra-ui/react";
 import { invoke } from "@tauri-apps/api";
 import React, { useState } from "react";
@@ -26,6 +24,28 @@ interface ReceiveFileTaskbarProps {
   fileReceivePath: string;
 }
 
+const StatusChip: React.FC<{
+  color: string;
+  icon: React.ReactElement;
+  label: string;
+}> = ({ color, icon, label }) => (
+  <Flex
+    alignItems="center"
+    gap={2}
+    backgroundColor={color}
+    height="40px"
+    borderRadius="full"
+    px={5}
+    fontSize="md"
+    fontWeight="semibold"
+    ml={3}
+    flexShrink={0}
+  >
+    {icon}
+    <Text>{label}</Text>
+  </Flex>
+);
+
 const ReceiveFileTaskbar: React.FC<ReceiveFileTaskbarProps> = ({
   error,
   fileSendProgress,
@@ -34,165 +54,88 @@ const ReceiveFileTaskbar: React.FC<ReceiveFileTaskbarProps> = ({
   fileReceivePath,
 }) => {
   const [loading, setLoading] = useState(false);
-  const buttonSize = useBreakpointValue(["xs", "xs", "sm"]);
 
   return (
     <Flex
-      height={["35px", "40px", "50px"]}
+      height="64px"
       alignItems="center"
-      bgColor={"#5c5c5c"}
+      bgColor="gray.700"
       color="white"
-      pl={[2, 3]}
-      borderBottom={"1px solid"}
-      borderColor="blackAlpha.900"
+      pl={4}
+      borderBottom="1px solid"
+      borderColor="blackAlpha.500"
     >
-      <Text fontSize={["12px", "12px", "15px"]} fontWeight="medium">
+      <Text fontSize="md" fontWeight="medium" color="whiteAlpha.800">
         Status:
       </Text>
 
       {error === "" ? (
         fileSendStatus === "Finished file" ? (
           <>
-            <Flex
-              width={["150px", "160px", "180px"]}
-              alignItems="center"
-              justifyContent={"center"}
-              backgroundColor="green.500"
-              height={["24px", "24px", "31px"]}
-              borderRadius="5px"
-              fontSize={buttonSize}
-              fontWeight="semibold"
-              ml={[1, 2, 3]}
-            >
-              <Spacer />
-              <Icon as={AiFillCheckCircle} />
-              <Spacer />
-              <Text>File transfer complete</Text>
-              <Spacer />
-            </Flex>
-
-            <Box
-              mr={[1, 2]}
-              ml={[1, 2]}
-              height={["60%", "70%", "80%"]}
-              width={"2px"}
-              backgroundColor={"blackAlpha.400"}
+            <StatusChip
+              color="green.500"
+              icon={<Icon as={AiFillCheckCircle} boxSize="20px" />}
+              label="File transfer complete"
             />
 
-            <Box>
-              <Text fontSize={["12px", "12px", "15px"]} fontWeight="medium">
-                {fileSendProgress} characters gelezen
-              </Text>
-            </Box>
+            <Box mx={4} height="60%" width="2px" backgroundColor="whiteAlpha.300" />
+
+            <Text fontSize="md" fontWeight="medium">
+              {fileSendProgress} characters gelezen
+            </Text>
           </>
         ) : fileSendStatus === "Ready to receive" ? (
-          <Flex
-            width={["150px", "160px", "170px"]}
-            alignItems="center"
-            justifyContent={"center"}
-            backgroundColor="twitter.500"
-            height={["24px", "24px", "31px"]}
-            borderRadius="5px"
-            fontSize={buttonSize}
-            fontWeight="semibold"
-            ml={[1, 2, 3]}
-          >
-            <Spacer />
-            <Icon as={Spinner} />
-            <Spacer />
-            <Text>Ready to receive file</Text>
-            <Spacer />
-          </Flex>
+          <StatusChip
+            color="brand.500"
+            icon={<Spinner size="sm" />}
+            label="Ready to receive file"
+          />
         ) : fileSendStatus === "Started reading" ? (
           <>
-            <Flex
-              width={["95px", "100px", "110px"]}
-              alignItems="center"
-              justifyContent={"center"}
-              backgroundColor="twitter.500"
-              height={["24px", "24px", "31px"]}
-              borderRadius="5px"
-              fontSize={buttonSize}
-              fontWeight="semibold"
-              ml={[1, 2, 3]}
-            >
-              <Spacer />
-              <Icon as={BsFileEarmarkBreak} />
-              <Spacer />
-              <Text>Receiving</Text>
-              <Spacer />
-            </Flex>
-
-            <Box
-              mr={[1, 2]}
-              ml={[1, 2]}
-              height={["60%", "70%", "80%"]}
-              width={"2px"}
-              backgroundColor={"blackAlpha.400"}
+            <StatusChip
+              color="brand.500"
+              icon={<Icon as={BsFileEarmarkBreak} boxSize="18px" />}
+              label="Receiving"
             />
 
-            <Text fontSize={["12px", "12px", "15px"]} fontWeight="medium">
-              Progress:
-            </Text>
+            <Box mx={4} height="60%" width="2px" backgroundColor="whiteAlpha.300" />
 
-            <Box ml={[1, 2, 3]}>
-              <Text fontSize={["12px", "12px", "15px"]} fontWeight="medium">
+            <Box minW="220px">
+              <Text fontSize="md" fontWeight="medium">
                 {fileSendProgress} characters gelezen
               </Text>
 
               <Progress
-                size={buttonSize}
                 isIndeterminate
-                height={"2px"}
-                color="twitter.500"
+                height="8px"
+                borderRadius="full"
+                colorScheme="brand"
+                bg="whiteAlpha.300"
                 mt={1}
               />
             </Box>
           </>
         ) : (
-          <Flex
-            width={["90px", "100px", "110px"]}
-            alignItems="center"
-            justifyContent={"center"}
-            backgroundColor="twitter.500"
-            height={["24px", "24px", "31px"]}
-            borderRadius="5px"
-            fontSize={buttonSize}
-            fontWeight="semibold"
-            ml={[1, 2, 3]}
-          >
-            <Spacer />
-            <Icon as={Spinner} />
-            <Spacer />
-            <Text>Starting up</Text>
-            <Spacer />
-          </Flex>
+          <StatusChip
+            color="brand.500"
+            icon={<Spinner size="sm" />}
+            label="Starting up"
+          />
         )
       ) : (
-        <Flex
-          width={"fit-content"}
-          pl={2}
-          pr={2}
-          alignItems="center"
-          justifyContent={"center"}
-          backgroundColor="red.500"
-          height={["24px", "24px", "31px"]}
-          borderRadius="5px"
-          fontSize={buttonSize}
-          fontWeight="semibold"
-          ml={[1, 2, 3]}
-        >
-          <Icon as={MdError} />
-          <Text ml="1">Error:</Text>
-          <Text ml="2">{error}</Text>
-        </Flex>
+        <StatusChip
+          color="red.500"
+          icon={<Icon as={MdError} boxSize="20px" />}
+          label={`Error: ${error}`}
+        />
       )}
       <LightMode>
         <Button
-          ml={"auto"}
-          mr={"3"}
-          size={buttonSize}
+          ml="auto"
+          mr={3}
+          size="md"
           colorScheme="red"
+          isLoading={loading}
           onClick={async () => {
             if (fileSendStatus === "Finished file") {
               setFileReceive(false);

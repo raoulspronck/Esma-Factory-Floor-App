@@ -50,20 +50,27 @@ const TaskBar: React.FC = () => {
   return (
     <>
       <Flex
-        backgroundColor="gray.900"
+        bgGradient="linear(to-b, gray.900, gray.800)"
         color="white"
-        height="50px"
+        height="68px"
         alignItems="center"
-        pl="3"
-        boxShadow="rgba(9, 30, 66, 0.25) 0px 4px 8px -2px, rgba(9, 30, 66, 0.08) 0px 0px 0px 1px"
+        pl="4"
+        boxShadow="rgba(9, 30, 66, 0.35) 0px 6px 12px -2px, rgba(9, 30, 66, 0.12) 0px 0px 0px 1px"
         width="100%"
         position="relative"
+        gap={2}
       >
         <FileMenu />
         <LoginSection />
 
         <Spacer />
-        <Text fontSize="25px" style={{ transform: "scale(1, 0.9)" }} ml={2}>
+        <Text
+          fontSize="26px"
+          fontWeight="semibold"
+          letterSpacing="wide"
+          sx={{ fontVariantNumeric: "tabular-nums" }}
+          ml={2}
+        >
           {currentDate}
         </Text>
         <Spacer />
@@ -74,7 +81,11 @@ const TaskBar: React.FC = () => {
           colorScheme="red"
           aria-label="exit"
           icon={<VscChromeClose />}
-          mr={2}
+          boxSize="52px"
+          minW="52px"
+          fontSize="22px"
+          borderRadius="xl"
+          mr={3}
           onClick={() => exit(1)}
         />
       </Flex>
