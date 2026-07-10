@@ -66,7 +66,14 @@ const ErrorLog: React.FC<ErrorLogProps> = ({
 
           <Flex flexDir={"column"} p={5} maxHeight={"65vh"} overflow={"auto"}>
             {connectionErrorText.map((e, key) => {
-              const split = e.split("+01:00 -");
+              const separator = " - ";
+              const separatorIndex = e.indexOf(separator);
+              const timestamp =
+                separatorIndex >= 0 ? e.substring(0, separatorIndex) : e;
+              const message =
+                separatorIndex >= 0
+                  ? e.substring(separatorIndex + separator.length)
+                  : "";
 
               return (
                 <Flex key={key} mb={2}>
@@ -76,9 +83,9 @@ const ErrorLog: React.FC<ErrorLogProps> = ({
                     mr={2}
                     minW="fit-content"
                   >
-                    {split[0].substring(0, 19)}
+                    {timestamp.substring(0, Math.min(timestamp.length, 19))}
                   </Text>
-                  <Text textColor={"gray.700"}>{split[1]}</Text>
+                  <Text textColor={"gray.700"}>{message}</Text>
                 </Flex>
               );
             })}

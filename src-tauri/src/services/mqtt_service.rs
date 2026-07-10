@@ -31,30 +31,17 @@ pub fn start_mqtt_loop(
                         format!("{} - {:?}", time, event),
                     );
 
-                    if !connected {
-                        mqtt_connected.store(true, Ordering::Relaxed);
-                        let _ = main_window.emit("exalise-connection", "connected");
-                        let _ = client
-                            .publish(
-                                format!("exalise/lastwill/{}", device_key),
-                                QoS::AtLeastOnce,
-                                false,
-                                "connected".as_bytes().to_vec(),
-                            )
-                            .await;
-                        connected = true;
-                    }
-
-                    if let Event::Incoming(Packet::PingResp) = event {
-                        let _ = main_window.emit("Ping", "check");
-                    }
-
                     if let Event::Incoming(Packet::ConnAck(ConnAck {
                         session_present: _,
                         code,
-                    })) = event
+                    })) = &event
                     {
                         if let ConnectReturnCode::Success = code {
+                            if !connected {
+                                mqtt_connected.store(true, Ordering::Relaxed);
+                                let _ = main_window.emit("exalise-connection", "connected");
+                                connected = true;
+                            }
                             let _ = client
                                 .subscribe("exalise/messages/#", QoS::AtMostOnce)
                                 .await;
@@ -62,6 +49,10 @@ pub fn start_mqtt_loop(
                                 .subscribe("exalise/lastwill/#", QoS::AtMostOnce)
                                 .await;
                         }
+                    }
+
+                    if let Event::Incoming(Packet::PingResp) = event {
+                        let _ = main_window.emit("Ping", "check");
                     }
 
                     if let Event::Incoming(Packet::Publish(p)) = event {
@@ -87,19 +78,18 @@ pub fn start_mqtt_loop(
                                 state.update_last_value(vec_topic[2], &payload).await;
                             } else if vec_topic.len() >= 4 {
                                 // Long topic: exalise/messages/{DEVICE}/{DATAPOINT_KEY}
-                                let datapoint_parts: Vec<&str> = vec_topic[3].split('_').collect();
                                 let msg_device_key = vec_topic[2];
+                                let datapoint_key = vec_topic[3..].join("/");
 
                                 // Handle remote shutdown command
                                 if msg_device_key == device_key
-                                    && datapoint_parts.first() == Some(&"Shutdown")
+                                    && datapoint_key.starts_with("Shutdown")
                                 {
                                     request_shutdown(app_handle.clone(), 60);
                                     continue;
                                 }
 
-                                let cache_key =
-                                    format!("{}---{}", msg_device_key, datapoint_parts[0]);
+                                let cache_key = format!("{}---{}", msg_device_key, datapoint_key);
                                 let event_name = format!("notification---{}", cache_key);
                                 let _ = main_window.emit(&event_name, &payload);
 
