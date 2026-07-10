@@ -97,4 +97,6 @@ pub async fn initialize_last_values(state: &AppState) {
             }
         }
     }
+
+    crate::services::cache_persist::flush_last_values(state).await;
 }

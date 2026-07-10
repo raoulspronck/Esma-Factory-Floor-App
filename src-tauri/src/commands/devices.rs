@@ -90,5 +90,6 @@ pub async fn get_last_value(
 #[tauri::command(async)]
 pub async fn post_remove_cache(state: State<'_, AppState>) -> Result<String, AppError> {
     state.last_values.write().await.clear();
+    let _ = std::fs::remove_file(crate::services::cache_persist::cache_file_path(&state));
     Ok("Cache removed successfully".into())
 }

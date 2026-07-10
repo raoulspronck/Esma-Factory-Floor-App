@@ -33,7 +33,7 @@ use crate::commands::{
 };
 use crate::config::{load_or_default, paths::compute_settings_dir, save_json};
 use crate::models::settings::{ApiSettings, BasicSettings, ExaliseSettings};
-use crate::services::{mqtt_service, rs232_service::start_rs232_monitor};
+use crate::services::{cache_persist, mqtt_service, rs232_service::start_rs232_monitor};
 use crate::state::{AppConfig, AppState};
 
 const BROKER_URL: &str = "mqtt.exalise.com";
@@ -48,6 +48,11 @@ async fn main() {
     let exalise: ExaliseSettings = load_or_default(&settings_dir.join("settings.exalise.json"));
     let api: ApiSettings = load_or_default(&settings_dir.join("api.settings.json"));
     let basic: BasicSettings = load_or_default(&settings_dir.join("basic.settings.json"));
+
+    // Seed the last-value cache from the previous session so the UI can paint
+    // immediately on window-open, before the fresh fetch in initialize_last_values completes.
+    let persisted_last_values: HashMap<String, String> =
+        load_or_default(&settings_dir.join("last_values.cache.json"));
 
     let http_client = reqwest::Client::new();
 
@@ -96,7 +101,7 @@ async fn main() {
     let app_state = AppState {
         http_client,
         mqtt_client: Mutex::new(mqtt_client),
-        last_values: RwLock::new(HashMap::new()),
+        last_values: RwLock::new(persisted_last_values),
         config: RwLock::new(AppConfig { exalise, api, basic }),
         mqtt_connected: mqtt_connected.clone(),
         shutdown_pending: Arc::new(AtomicBool::new(false)),
@@ -122,6 +127,10 @@ async fn main() {
                 let state = app_handle_init.state::<AppState>();
                 initialize_last_values(&state).await;
             });
+
+            // Periodically persist the (MQTT-updated) in-memory cache to disk, so a
+            // future restart has a recent seed to paint the UI with instantly.
+            cache_persist::start_periodic_flush(app_handle.clone());
 
             // Day-off check — runs after the window opens so the countdown dialog can appear.
             let app_handle_dayoff = app_handle.clone();
