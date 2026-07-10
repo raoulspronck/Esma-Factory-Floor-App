@@ -8,6 +8,19 @@ use crate::error::AppError;
 use crate::models::settings::{Debiteur, LoginData};
 use crate::state::AppState;
 
+pub fn append_log(state: &AppState, data: &str) -> bool {
+    let path = state.settings_dir.join("logs.txt");
+    let timestamp = Local::now().format("%d-%m-%Y %H:%M:%S");
+    let line = format!("{} - {}\n", timestamp, data);
+
+    OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .and_then(|mut f| f.write_all(line.as_bytes()))
+        .is_ok()
+}
+
 #[tauri::command(async)]
 pub async fn close_splashscreen(window: tauri::Window) {
     if let Some(splash) = window.get_window("splashscreen") {
@@ -25,16 +38,7 @@ pub fn get_pdf_file() -> Result<String, AppError> {
 
 #[tauri::command]
 pub fn write_to_log_file(data: String, state: State<'_, AppState>) -> bool {
-    let path = state.settings_dir.join("logs.txt");
-    let timestamp = Local::now().format("%d-%m-%Y %H:%M:%S");
-    let line = format!("{}: {}\n", timestamp, data);
-
-    OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-        .and_then(|mut f| f.write_all(line.as_bytes()))
-        .is_ok()
+    append_log(&*state, &data)
 }
 
 // ── ESMA API (debiteuren) ──────────────────────────────────────────────────────

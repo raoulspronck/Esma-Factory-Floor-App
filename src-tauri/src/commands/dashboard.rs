@@ -2,6 +2,7 @@ use tauri::State;
 
 use crate::config::save_json;
 use crate::error::AppError;
+use crate::commands::misc::append_log;
 use crate::models::dashboard::{Dashboard, Device, Layout, ValueResponse};
 use crate::state::AppState;
 
@@ -88,14 +89,53 @@ pub async fn initialize_last_values(state: &AppState) {
         .send()
         .await;
 
-    if let Ok(resp) = response {
-        if let Ok(text) = resp.text().await {
-            if let Ok(values) = serde_json::from_str::<Vec<ValueResponse>>(&text) {
-                for v in values {
-                    state.update_last_value(&v.id_key, &v.value).await;
-                }
-            }
+    let response = match response {
+        Ok(resp) => resp,
+        Err(e) => {
+            append_log(
+                state,
+                &format!(
+                    "initialize_last_values HTTP request failed: {}",
+                    e
+                ),
+            );
+            crate::services::cache_persist::flush_last_values(state).await;
+            return;
         }
+    };
+
+    let text = match response.text().await {
+        Ok(text) => text,
+        Err(e) => {
+            append_log(
+                state,
+                &format!(
+                    "initialize_last_values response read failed: {}",
+                    e
+                ),
+            );
+            crate::services::cache_persist::flush_last_values(state).await;
+            return;
+        }
+    };
+
+    let values = match serde_json::from_str::<Vec<ValueResponse>>(&text) {
+        Ok(values) => values,
+        Err(e) => {
+            append_log(
+                state,
+                &format!(
+                    "initialize_last_values JSON parse failed: {} / response: {}",
+                    e, text
+                ),
+            );
+            crate::services::cache_persist::flush_last_values(state).await;
+            return;
+        }
+    };
+
+    for v in values {
+        state.update_last_value(&v.id_key, &v.value).await;
     }
 
     crate::services::cache_persist::flush_last_values(state).await;
