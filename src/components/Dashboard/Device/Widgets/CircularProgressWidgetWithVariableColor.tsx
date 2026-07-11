@@ -3,14 +3,10 @@ import {
   CircularProgress,
   CircularProgressLabel,
   Flex,
-  Stat,
-  StatNumber,
   Text,
 } from "@chakra-ui/react";
-import { invoke } from "@tauri-apps/api";
-import { listen } from "@tauri-apps/api/event";
 import React, { useEffect, useState } from "react";
-import { emitter } from "../../../../index";
+import { useDeviceValue } from "../../../../hooks/useDeviceValue";
 
 interface CircularProgressWidgetWithVariableColorProps {
   deviceId: string;
@@ -20,78 +16,18 @@ interface CircularProgressWidgetWithVariableColorProps {
 
 const CircularProgressWidgetWithVariableColor: React.FC<
   CircularProgressWidgetWithVariableColorProps
-> = ({ deviceId, dataPoints, deviceKey }) => {
-  const [value, setValue] = useState(0);
-  const [maxValue, setMaxValue] = useState(0);
-  const [color, setColor] = useState("none");
+> = ({ dataPoints, deviceKey }) => {
+  const rawValue = useDeviceValue(deviceKey, dataPoints[0]);
+  const rawMaxValue = useDeviceValue(deviceKey, dataPoints[1]);
+  const rawColor = useDeviceValue(deviceKey, dataPoints[2]);
+  const loading =
+    rawValue === undefined || rawMaxValue === undefined || rawColor === undefined;
+
+  const value = parseInt(rawValue ?? "0") || 0;
+  const maxValue = parseInt(rawMaxValue ?? "0") || 0;
+  const color = (rawColor ?? "none").toLowerCase();
+
   const [realColor, setRealColor] = useState("none");
-  const [loading, setLoading] = useState(false);
-
-  const fetchValues = async () => {
-    setLoading(true);
-
-    try {
-      const val = (await invoke("get_last_value", {
-        deviceId,
-        deviceKey,
-        datapointKey: dataPoints[0],
-      })) as any;
-
-      const maxVal = (await invoke("get_last_value", {
-        deviceId,
-        deviceKey,
-        datapointKey: dataPoints[1],
-      })) as any;
-
-      const color = (await invoke("get_last_value", {
-        deviceId,
-        deviceKey,
-        datapointKey: dataPoints[2],
-      })) as any;
-
-      setValue(parseInt(JSON.parse(val).value as string));
-      setMaxValue(parseInt(JSON.parse(maxVal).value as string));
-      setColor((JSON.parse(color).value as string).toLowerCase());
-
-      setLoading(false);
-    } catch (error) {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    emitter.on("refetch", fetchValues);
-
-    fetchValues();
-
-    const unlisten1 = listen(
-      `notification---${deviceKey}---${dataPoints[0]}`,
-      (event) => {
-        setValue(parseInt(event.payload as string));
-      }
-    );
-
-    const unlisten2 = listen(
-      `notification---${deviceKey}---${dataPoints[1]}`,
-      (event) => {
-        setMaxValue(parseInt(event.payload as string));
-      }
-    );
-
-    const unlisten3 = listen(
-      `notification---${deviceKey}---${dataPoints[2]}`,
-      (event) => {
-        setColor((event.payload as string).toLowerCase());
-      }
-    );
-
-    return () => {
-      emitter.off("refetch", fetchValues);
-      unlisten1.then((f) => f());
-      unlisten2.then((f) => f());
-      unlisten3.then((f) => f());
-    };
-  }, []);
 
   useEffect(() => {
     let interval: any;
@@ -114,30 +50,35 @@ const CircularProgressWidgetWithVariableColor: React.FC<
   }, [color]);
 
   return (
-    <Flex justifyContent={"center"} pb={5} pt={5}>
+    <Flex justifyContent={"center"} pb={6} pt={6}>
       {loading ? (
         <Text fontSize="30px">Loading...</Text>
       ) : (
         <CircularProgress
           value={(value / maxValue) * 100}
-          size="180px"
+          size="208px"
+          thickness="10px"
           color={`${realColor}.400`}
-          trackColor="gray.300"
-          border="10px solid"
+          trackColor="whiteAlpha.200"
+          capIsRound
+          border="12px solid"
           borderColor={`${realColor}.400`}
           borderRadius={"50%"}
         >
           <CircularProgressLabel color="white">
             <Flex justifyContent={"center"}>
               <Box width={"fit-content"}>
-                <Text fontSize={"45px"} mb={-2} fontWeight="medium">
+                <Text fontSize={"56px"} fontWeight="extrabold" lineHeight="1">
                   {value}
                 </Text>
                 <Text
-                  fontSize={"25px"}
-                  pt={-2}
-                  borderTop="1px"
-                  borderColor={"white"}
+                  fontSize={"28px"}
+                  fontWeight="semibold"
+                  color="whiteAlpha.700"
+                  pt={1}
+                  mt={1}
+                  borderTop="1px solid"
+                  borderColor={"whiteAlpha.400"}
                 >
                   {maxValue}
                 </Text>

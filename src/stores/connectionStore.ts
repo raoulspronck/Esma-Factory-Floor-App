@@ -9,6 +9,11 @@ interface Rs232Data {
   decimal: string;
 }
 
+export interface DeviceData {
+  connected?: boolean;
+  dataPoint: any[];
+}
+
 interface ConnectionState {
   mqttStatus: "connected" | "disconnected";
   rs232Status: "started" | "stopped";
@@ -18,6 +23,15 @@ interface ConnectionState {
   // In-memory last-value cache, kept in sync with the backend via MQTT events.
   // Key format: "deviceKey---datapointKey"
   lastValues: Record<string, string>;
+
+  // When each lastValues entry was last updated (ISO string), for widgets that
+  // display value age. Same key format as lastValues.
+  lastValueTimestamps: Record<string, string>;
+
+  // Device shape (connected status + datapoint definitions) keyed by device id,
+  // hydrated once from `get_dashboard_data` instead of each DeviceWidget
+  // fetching its own device via `get_device`.
+  deviceData: Record<string, DeviceData>;
 
   // Active alert state
   alerts: Alert[];
@@ -43,6 +57,10 @@ interface ConnectionState {
   setRs232Error: (error: string) => void;
   appendRs232Log: (data: Rs232Data) => void;
   setLastValue: (key: string, value: string) => void;
+  setLastValues: (values: Record<string, string>) => void;
+  setLastValueTimestamp: (key: string, time: string) => void;
+  setLastValueTimestamps: (values: Record<string, string>) => void;
+  setDeviceData: (data: Record<string, DeviceData>) => void;
   setAlerts: (alerts: Alert[]) => void;
   setActiveAlertMessage: (msg: string) => void;
   setFileSend: (v: boolean) => void;
@@ -61,6 +79,8 @@ export const useConnectionStore = create<ConnectionState>((set) => ({
   rs232Error: "",
   rs232Log: [],
   lastValues: {},
+  lastValueTimestamps: {},
+  deviceData: {},
   alerts: [],
   activeAlertMessage: "",
   fileSend: false,
@@ -81,6 +101,17 @@ export const useConnectionStore = create<ConnectionState>((set) => ({
     })),
   setLastValue: (key, value) =>
     set((state) => ({ lastValues: { ...state.lastValues, [key]: value } })),
+  setLastValues: (values) =>
+    set((state) => ({ lastValues: { ...state.lastValues, ...values } })),
+  setLastValueTimestamp: (key, time) =>
+    set((state) => ({
+      lastValueTimestamps: { ...state.lastValueTimestamps, [key]: time },
+    })),
+  setLastValueTimestamps: (values) =>
+    set((state) => ({
+      lastValueTimestamps: { ...state.lastValueTimestamps, ...values },
+    })),
+  setDeviceData: (data) => set({ deviceData: data }),
   setAlerts: (alerts) => set({ alerts }),
   setActiveAlertMessage: (msg) => set({ activeAlertMessage: msg }),
   setFileSend: (fileSend) => set({ fileSend }),

@@ -7,13 +7,18 @@ import {
   StatLabel,
   StatNumber,
 } from "@chakra-ui/react";
-import { invoke } from "@tauri-apps/api";
-import { UnlistenFn, listen } from "@tauri-apps/api/event";
-import React, { useEffect, useRef, useState } from "react";
+import React from "react";
 import { formatDate } from "../../../../utils/formatDate";
 import { formatNumberValue } from "../../../../utils/formatValue";
-import { emitter } from "../../../../index";
 import { formatedDateTime } from "../../../../utils/formatedDateTime";
+import { useDeviceValue, useDeviceValueTimestamp } from "../../../../hooks/useDeviceValue";
+import {
+  STAT_DIVIDER,
+  STAT_LABEL_COLOR,
+  STAT_ROW_MIN_H,
+  STAT_TIMESTAMP_COLOR,
+  STAT_VALUE_COLOR,
+} from "./widgetTokens";
 
 interface DefaultWidgetProps {
   deviceId: string;
@@ -33,127 +38,99 @@ const formatValue = (value: string, type: string) => {
   }
 };
 
+// Sized so a value fits the ~220px value column on one line; anything
+// longer than that still gets a size (rather than shrinking forever) and
+// relies on noOfLines={1} to ellipsize instead of wrapping into the
+// timestamp below it.
 const textSizeCalculate = (text: string) => {
   if (text === undefined) {
-    return 30;
+    return 32;
   }
 
   if (text.length < 6) {
-    return 35;
+    return 46;
   } else if (text.length < 11) {
-    return 32;
+    return 38;
   } else if (text.length < 13) {
-    return 27;
+    return 32;
   } else if (text.length < 20) {
-    return 25;
-  } else if (text.length < 26) {
     return 23;
+  } else if (text.length < 26) {
+    return 19;
   } else if (text.length < 34) {
-    return 20;
+    return 16;
   }
-  return 15;
+  return 13;
 };
 
+const halfSizeCalculate = (text: string) => Math.max(textSizeCalculate(text) - 10, 14);
+
 const DefaultWidget: React.FC<DefaultWidgetProps> = ({
-  deviceId,
   deviceKey,
   dataPoints,
   types,
   small,
 }) => {
-  const [value, setValue] = useState({
-    value: "",
-    time: "",
-  });
-  const [loading, setLoading] = useState(true);
-  const alreadyFetched = useRef(false);
+  const datapointKey = small !== undefined ? dataPoints[small] : dataPoints[0];
+  const type = small !== undefined ? types[small] : types[0];
 
-  const fetchValue = () => {
-    setLoading(true);
-    invoke("get_last_value", {
-      deviceId,
-      deviceKey,
-      datapointKey: small !== undefined ? dataPoints[small] : dataPoints[0],
-    })
-      .then((e: any) => {
-        try {
-          let valueJson = JSON.parse(e);
-
-          setValue({
-            value: formatNumberValue(
-              valueJson.value,
-              small !== undefined ? types[small] : types[0]
-            ),
-            time: valueJson.createdAt,
-          });
-        } catch (_error) {}
-
-        setLoading(false);
-      })
-      .catch((_err) => {
-        setLoading(false);
-      });
+  const rawValue = useDeviceValue(deviceKey, datapointKey);
+  const time = useDeviceValueTimestamp(deviceKey, datapointKey);
+  const loading = type === undefined || rawValue === undefined;
+  const value = {
+    value: loading ? "" : formatNumberValue(rawValue, type),
+    time: time ?? "",
   };
-
-  useEffect(() => {
-    if (
-      small !== undefined ? types[small] !== undefined : types[0] !== undefined
-    ) {
-      if (alreadyFetched.current === false) {
-        alreadyFetched.current = true;
-
-        emitter.on("refetch", fetchValue);
-
-        fetchValue();
-
-        listen(
-          `notification---${deviceKey}---${
-            small !== undefined ? dataPoints[small] : dataPoints[0]
-          }`,
-          (event) => {
-            setValue({
-              value: formatNumberValue(
-                event.payload as string,
-                small !== undefined ? types[small] : types[0]
-              ),
-              time: new Date().toISOString(),
-            });
-          }
-        );
-      }
-    }
-  }, [types]);
 
   if (small !== undefined) {
     return (
-      <Box width={"100%"} pr={3} pl={3} maxH="80px" minH={"80px"}>
+      <Box width={"100%"} pr={4} pl={4} maxH="92px" minH={"92px"} {...STAT_DIVIDER}>
         <Stat>
           <Flex
             alignItems={"start"}
             flexDir={"column"}
-            maxH="80px"
-            height={"80px"}
+            maxH="92px"
+            height={"92px"}
+            justifyContent="center"
             position={"relative"}
           >
-            <StatLabel fontSize={"13px"}>{dataPoints[small]}</StatLabel>
+            <StatLabel
+              fontSize={"14px"}
+              fontWeight="medium"
+              color={STAT_LABEL_COLOR}
+              noOfLines={1}
+            >
+              {dataPoints[small]}
+            </StatLabel>
 
             {loading ? (
-              <StatNumber fontSize="20px">Loading...</StatNumber>
+              <StatNumber fontSize="22px" color={STAT_VALUE_COLOR}>
+                Loading...
+              </StatNumber>
             ) : value.value !== "" ? (
               <StatNumber
-                fontSize={`${textSizeCalculate(value.value) - 5}px`}
-                //lineHeight={`${textSizeCalculate(value.value) * 1.2}px`}
-                textOverflow="ellipsis"
-                wordBreak={"break-word"}
-                whiteSpace={"break-spaces"}
-                mt={-1}
+                fontSize={`${halfSizeCalculate(value.value)}px`}
+                fontWeight="bold"
+                color={STAT_VALUE_COLOR}
+                noOfLines={1}
+                lineHeight="1.15"
+                mt={0.5}
+                width="100%"
               >
                 {formatValue(value.value, types[small])}
               </StatNumber>
             ) : (
-              <StatNumber fontSize="20px">No data</StatNumber>
+              <StatNumber fontSize="22px" color={STAT_VALUE_COLOR}>
+                No data
+              </StatNumber>
             )}
-            <StatHelpText fontSize={"10px"} position={"absolute"} bottom={0}>
+            <StatHelpText
+              fontSize={"10px"}
+              color={STAT_TIMESTAMP_COLOR}
+              position={"absolute"}
+              bottom={1}
+              m={0}
+            >
               {loading ? "" : value.value !== "" ? formatDate(value.time) : ""}
             </StatHelpText>
           </Flex>
@@ -163,31 +140,44 @@ const DefaultWidget: React.FC<DefaultWidgetProps> = ({
   }
 
   return (
-    <Box width={"100%"} pr={5} pl={5} maxH="80px" minH={"80px"}>
-      <Stat>
+    <Box width={"100%"} pr={6} pl={6} maxH={STAT_ROW_MIN_H} minH={STAT_ROW_MIN_H} {...STAT_DIVIDER}>
+      <Stat height="100%" display="flex" flexDir="column" justifyContent="center">
         <Flex alignItems={"center"}>
-          <StatLabel fontSize={"16px"}>{dataPoints[0]}</StatLabel>
+          <StatLabel
+            fontSize={"17px"}
+            fontWeight="medium"
+            color={STAT_LABEL_COLOR}
+            noOfLines={1}
+            flexShrink={1}
+            minW={0}
+          >
+            {dataPoints[0]}
+          </StatLabel>
 
-          <Box ml="auto" textAlign={"right"} maxWidth={"180px"}>
+          <Box ml="auto" textAlign={"right"} maxWidth={"220px"} flexShrink={0}>
             {loading ? (
-              <StatNumber fontSize="30px">Loading...</StatNumber>
+              <StatNumber fontSize="32px" color={STAT_VALUE_COLOR}>
+                Loading...
+              </StatNumber>
             ) : value.value !== "" ? (
               <StatNumber
                 fontSize={`${textSizeCalculate(value.value)}px`}
-                lineHeight={`${textSizeCalculate(value.value) * 1.2}px`}
-                textOverflow="ellipsis"
-                wordBreak={"break-word"}
-                whiteSpace={"break-spaces"}
+                lineHeight={`${textSizeCalculate(value.value) * 1.15}px`}
+                fontWeight="bold"
+                color={STAT_VALUE_COLOR}
+                noOfLines={1}
               >
                 {formatValue(value.value, types[0])}
               </StatNumber>
             ) : (
-              <StatNumber fontSize="30px">No data</StatNumber>
+              <StatNumber fontSize="32px" color={STAT_VALUE_COLOR}>
+                No data
+              </StatNumber>
             )}
           </Box>
         </Flex>
         <Flex mt={1}>
-          <StatHelpText fontSize={"12px"} ml="auto">
+          <StatHelpText fontSize={"11px"} color={STAT_TIMESTAMP_COLOR} ml="auto" mb={0}>
             {loading ? "" : value.value !== "" ? formatDate(value.time) : ""}
           </StatHelpText>
         </Flex>

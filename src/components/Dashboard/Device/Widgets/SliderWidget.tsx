@@ -12,10 +12,10 @@ import {
   Text,
 } from "@chakra-ui/react";
 import { invoke } from "@tauri-apps/api";
-import { listen } from "@tauri-apps/api/event";
 import React, { useEffect, useState } from "react";
 import { formatDate } from "../../../../utils/formatDate";
-import { emitter } from "../../../../index";
+import { useDeviceValue, useDeviceValueTimestamp } from "../../../../hooks/useDeviceValue";
+import { STAT_DIVIDER, STAT_LABEL_COLOR, STAT_ROW_MIN_H, STAT_TIMESTAMP_COLOR } from "./widgetTokens";
 
 interface SliderWidgetProps {
   deviceId: string;
@@ -41,23 +41,36 @@ const textSizeCalculate = (text: string) => {
 };
 
 const SliderWidget: React.FC<SliderWidgetProps> = ({
-  deviceId,
   deviceKey,
   dataPoints,
-  types,
   small,
 }) => {
-  const [value, setValue] = useState({
-    value: "",
-    time: "",
-  });
+  const datapointKey = small !== undefined ? dataPoints[small] : dataPoints[0];
+
+  const rawValue = useDeviceValue(deviceKey, datapointKey);
+  const time = useDeviceValueTimestamp(deviceKey, datapointKey);
+  const loading = rawValue === undefined;
+  const value = {
+    value: loading ? "" : rawValue,
+    time: time ?? "",
+  };
+
   const [slider, setSlider] = useState(0);
-  const [loading, setLoading] = useState(false);
+
+  // Resync the slider position whenever the underlying value changes
+  // (initial hydration, a live push, or a manual refetch) - but not during
+  // an in-progress local drag, since that only calls setSlider directly.
+  useEffect(() => {
+    if (rawValue !== undefined) {
+      setSlider(parseInt(rawValue));
+    }
+  }, [rawValue]);
 
   const labelStyles = {
     mt: "2",
     ml: "-2.5",
-    fontSize: ["8px", "10px", "12px"],
+    color: STAT_TIMESTAMP_COLOR,
+    fontSize: ["10px", "12px", "14px"],
   };
 
   const send = (val: number) => {
@@ -70,68 +83,17 @@ const SliderWidget: React.FC<SliderWidgetProps> = ({
       .catch();
   };
 
-  const fetchValue = () => {
-    setLoading(true);
-    invoke("get_last_value", {
-      deviceId,
-      deviceKey,
-      datapointKey: small !== undefined ? dataPoints[small] : dataPoints[0],
-    })
-      .then((e: any) => {
-        try {
-          let valueJson = JSON.parse(e);
-
-          setValue({
-            value: valueJson.value,
-            time: valueJson.createdAt,
-          });
-          setSlider(parseInt(valueJson.value));
-        } catch (_error) {}
-
-        setLoading(false);
-      })
-      .catch((_err) => {
-        setLoading(false);
-      });
-  };
-
-  useEffect(() => {
-    emitter.on("refetch", fetchValue);
-
-    fetchValue();
-    // Subscribe to the event
-
-    const unlisten = listen(
-      `notification---${deviceKey}---${
-        small !== undefined ? dataPoints[small] : dataPoints[0]
-      }`,
-      (event) => {
-        setValue({
-          value: event.payload as string,
-          time: new Date().toISOString(),
-        });
-        setSlider(parseInt(event.payload as string));
-      }
-    );
-
-    // Clean up the subscription on component unmount
-    return () => {
-      emitter.off("refetch", fetchValue);
-      unlisten.then((f) => f());
-    };
-  }, []);
-
   return (
-    <Box width={"100%"} pr={5} pl={5} maxH="80px" minH={"80px"}>
-      <Stat>
+    <Box width={"100%"} pr={6} pl={6} maxH={STAT_ROW_MIN_H} minH={STAT_ROW_MIN_H} {...STAT_DIVIDER}>
+      <Stat height="100%" display="flex" flexDir="column" justifyContent="center">
         <Flex alignItems={"center"}>
-          <StatLabel fontSize={"16px"} width={"fit-content"}>
+          <StatLabel fontSize={"17px"} fontWeight="medium" color={STAT_LABEL_COLOR} width={"fit-content"} noOfLines={1} flexShrink={0}>
             {dataPoints[0]}
           </StatLabel>
 
           <Box width={"100%"} ml={5} mr={0} textAlign={"right"}>
             {loading ? (
-              <Text>Loading...</Text>
+              <Text color={STAT_LABEL_COLOR}>Loading...</Text>
             ) : (
               <Slider
                 aria-label="slider-ex-6"
@@ -154,22 +116,23 @@ const SliderWidget: React.FC<SliderWidgetProps> = ({
                   value={slider}
                   textAlign="center"
                   color={"white"}
-                  mt={["-5", "-6", "-7"]}
-                  ml={["-3", "-4", "-5"]}
-                  fontSize={["10px", "12px", "14px"]}
+                  fontWeight="bold"
+                  mt={["-6", "-7", "-8"]}
+                  ml={["-4", "-5", "-6"]}
+                  fontSize={["14px", "16px", "18px"]}
                 >
                   {slider}%
                 </SliderMark>
-                <SliderTrack>
-                  <SliderFilledTrack />
+                <SliderTrack height="8px" borderRadius="full" bg="whiteAlpha.200">
+                  <SliderFilledTrack bg="brand.400" />
                 </SliderTrack>
-                <SliderThumb width={["5px", "10px", "15px"]} />
+                <SliderThumb boxSize="26px" />
               </Slider>
             )}
           </Box>
         </Flex>
         <Flex mt={3}>
-          <StatHelpText fontSize={"12px"} ml="auto">
+          <StatHelpText fontSize={"11px"} color={STAT_TIMESTAMP_COLOR} ml="auto" mb={0}>
             {loading ? "" : value.value !== "" ? formatDate(value.time) : ""}
           </StatHelpText>
         </Flex>

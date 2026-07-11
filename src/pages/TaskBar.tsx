@@ -40,11 +40,6 @@ const TaskBar: React.FC = () => {
     invoke("get_exalise_connection")
       .then((e) => setMqttStatus(e === true ? "connected" : "disconnected"))
       .catch(console.log);
-
-    // Reset ping counter on each heartbeat
-    listen("Ping", () => {
-      // ping relaunch logic lives in ConnectionStatus
-    });
   }, []);
 
   return (

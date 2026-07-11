@@ -2,12 +2,14 @@ import { Flex, Icon, Menu, MenuButton, MenuItem, MenuList, Text, useDisclosure }
 import { invoke } from "@tauri-apps/api";
 import { ElementType, useEffect, useRef, useState } from "react";
 import { AiOutlineApi, AiOutlineCloudUpload, AiOutlineSetting, AiOutlineUsb } from "react-icons/ai";
+import { MdOutlineNetworkCheck } from "react-icons/md";
 
 import EsmaApiSettingsModal from "../SettingsMenu/esmaApiSettingsModal";
 import ExaliseHttpSettingModal from "../SettingsMenu/exaliseHttpSettingModal";
 import ExaliseSettingModal from "../SettingsMenu/exaliseSettingModal";
 import GeneralSettingsModal from "../SettingsMenu/generalSettingsModal";
 import SerialPortSettingModal from "../SettingsMenu/serialPortSettingModal";
+import TestConnectionModal from "../SettingsMenu/testConnectionModal";
 
 export default function SettingsMenu() {
   const { isOpen: isOpenSerial, onOpen: onOpenSerial, onClose: onCloseSerial } = useDisclosure();
@@ -15,6 +17,7 @@ export default function SettingsMenu() {
   const { isOpen: isOpenHttp, onOpen: onOpenHttp, onClose: onCloseHttp } = useDisclosure();
   const { isOpen: isOpenApi, onOpen: onOpenApi, onClose: onCloseApi } = useDisclosure();
   const { isOpen: isOpenGeneral, onOpen: onOpenGeneral, onClose: onCloseGeneral } = useDisclosure();
+  const { isOpen: isOpenTest, onOpen: onOpenTest, onClose: onCloseTest } = useDisclosure();
 
   // RS232 form state
   const [port, setPort] = useState("");
@@ -148,6 +151,14 @@ export default function SettingsMenu() {
           httpKey={httpKey} setHttpKey={setHttpKey}
           httpSecret={httpSecret} setHttpSecret={setHttpSecret}
         />
+
+        <MenuItem onClick={onOpenTest} minH="60px">
+          <Flex alignItems="center" width="100%" gap={3}>
+            {itemIcon(MdOutlineNetworkCheck)}
+            <Text>Test API connection</Text>
+          </Flex>
+        </MenuItem>
+        <TestConnectionModal isOpen={isOpenTest} onClose={onCloseTest} />
 
         <MenuItem onClick={onOpenApi} minH="60px">
           <Flex alignItems="center" width="100%" gap={3}>

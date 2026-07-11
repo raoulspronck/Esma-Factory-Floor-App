@@ -15,6 +15,13 @@ pub struct AppState {
     pub mqtt_client: Mutex<AsyncClient>,
     /// In-memory cache of last known values per datapoint key (`"deviceKey---datapointKey"`).
     pub last_values: RwLock<HashMap<String, String>>,
+    /// In-memory cache of device/group shape (connected + datapoint definitions),
+    /// keyed by device id, as returned by `/api/getdashboarddata`. `None` until the
+    /// first fetch completes.
+    pub device_data: RwLock<Option<serde_json::Value>>,
+    /// Serializes concurrent `get_dashboard_data` callers so a cache miss triggers
+    /// exactly one HTTP fetch instead of one per caller.
+    pub dashboard_fetch_lock: Mutex<()>,
     /// All user-editable configuration. Write-locked when saving; reading is cheap.
     pub config: RwLock<AppConfig>,
     /// True while the MQTT broker connection is active.

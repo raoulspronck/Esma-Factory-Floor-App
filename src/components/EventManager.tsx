@@ -4,6 +4,8 @@ import { invoke } from "@tauri-apps/api";
 
 import { useConnectionStore } from "../stores/connectionStore";
 import { useDashboardStore } from "../stores/dashboardStore";
+import { getDashboardData } from "../api/dashboard";
+import { emitter } from "../index";
 
 /**
  * EventManager — mounts once in App.tsx and owns ALL Tauri event subscriptions.
@@ -16,6 +18,10 @@ export default function EventManager(): null {
   const setRs232Error = useConnectionStore((s) => s.setRs232Error);
   const appendRs232Log = useConnectionStore((s) => s.appendRs232Log);
   const setLastValue = useConnectionStore((s) => s.setLastValue);
+  const setLastValues = useConnectionStore((s) => s.setLastValues);
+  const setLastValueTimestamp = useConnectionStore((s) => s.setLastValueTimestamp);
+  const setLastValueTimestamps = useConnectionStore((s) => s.setLastValueTimestamps);
+  const setDeviceData = useConnectionStore((s) => s.setDeviceData);
   const alerts = useConnectionStore((s) => s.alerts);
   const setActiveAlertMessage = useConnectionStore((s) => s.setActiveAlertMessage);
   const setShutdownCountdown = useConnectionStore((s) => s.setShutdownCountdown);
@@ -83,6 +89,7 @@ export default function EventManager(): null {
               const eventName = `notification---${key}`;
               listen<string>(eventName, (e) => {
                 setLastValue(key, e.payload);
+                setLastValueTimestamp(key, new Date().toISOString());
                 // Check alerts
                 for (const alert of alerts) {
                   if (alert.device_key === device.key && alert.data_point === dp) {
@@ -104,6 +111,41 @@ export default function EventManager(): null {
     // Re-subscribe when the dashboard devices change (new devices/datapoints added).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dashboard.devices]);
+
+  useEffect(() => {
+    const fetchDashboardData = () => {
+      getDashboardData()
+        .then(({ devices, values }) => {
+          setDeviceData(devices);
+
+          // Each entry in `values` is the same JSON-wrapped shape the old
+          // per-widget get_last_value calls used to return
+          // (`{id, value, key, createdAt}`, stringified). Unwrap into the
+          // plain-value/timestamp cache widgets read reactively.
+          const rawValues: Record<string, string> = {};
+          const timestamps: Record<string, string> = {};
+          for (const [key, wrapped] of Object.entries(values)) {
+            try {
+              const parsed = JSON.parse(wrapped);
+              rawValues[key] = parsed.value;
+              if (parsed.createdAt) timestamps[key] = parsed.createdAt;
+            } catch (_) {}
+          }
+          setLastValues(rawValues);
+          setLastValueTimestamps(timestamps);
+        })
+        .catch(console.error);
+    };
+
+    // Initial hydration - one call instead of one `get_device` per device plus
+    // one `get_last_value` per widget datapoint.
+    fetchDashboardData();
+
+    // The taskbar's "Refetch" button clears the backend cache then emits this;
+    // re-running the same fetch repopulates both stores from fresh data.
+    emitter.on("refetch", fetchDashboardData);
+    return () => emitter.off("refetch", fetchDashboardData);
+  }, [setDeviceData, setLastValues, setLastValueTimestamps]);
 
   return null;
 }

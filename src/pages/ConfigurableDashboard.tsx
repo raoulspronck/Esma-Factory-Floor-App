@@ -8,7 +8,7 @@ import {
   Text,
   useDisclosure,
 } from "@chakra-ui/react";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import GridLayout from "react-grid-layout";
 import { MdAddToQueue } from "react-icons/md";
 import AddDevicesToDashboardModal from "../components/Dashboard/AddDevicesToDashboardModal";
@@ -47,6 +47,23 @@ const ConfigurableDashboard: React.FC = () => {
   const [currentLayout, setCurrentLayout] = useState(null);
   const [refresh, setRefresh] = useState(false);
 
+  // Measures the grid's actual container instead of assuming every
+  // shop-floor touchscreen is 1920px wide (screen size varies per machine).
+  const gridContainerRef = useRef<HTMLDivElement>(null);
+  const [gridWidth, setGridWidth] = useState(() => window.innerWidth);
+
+  useEffect(() => {
+    const el = gridContainerRef.current;
+    if (!el) return;
+
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width;
+      if (width) setGridWidth(width);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   const saveLayout = async () => {
     if (!currentLayout) return;
     const newLayout = (currentLayout as any[]).map((item: any) => ({
@@ -77,18 +94,18 @@ const ConfigurableDashboard: React.FC = () => {
       bgColor={"black"}
       color="white"
     >
-      <Box height={"calc(100% - 150px)"} width="100%">
+      <Box height={"calc(100% - 150px)"} width="100%" ref={gridContainerRef}>
         {dashboard.layout.length > 0 ? (
           <GridLayout
             className="layout"
             layout={dashboard.layout}
             cols={5}
-            width={1920}
+            width={gridWidth}
             maxRows={18}
-            rowHeight={60}
+            rowHeight={72}
             compactType="horizontal"
-            margin={[20, 20]}
-            containerPadding={[10, 10]}
+            margin={[24, 24]}
+            containerPadding={[16, 16]}
             draggableCancel={".notdraggable"}
             isResizable={layoutChangable}
             onLayoutChange={(e) => setCurrentLayout(e)}

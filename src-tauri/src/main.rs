@@ -20,8 +20,8 @@ use tokio::sync::{Mutex, RwLock};
 use tokio::time::Duration;
 
 use crate::commands::{
-    dashboard::{get_dashboard, initialize_last_values, save_dashboard_layout, save_device_to_dashboard, save_widget_to_dashboard},
-    devices::{get_device, get_devices, get_last_value, get_own_device, post_remove_cache},
+    dashboard::{get_dashboard, get_dashboard_data, prefetch_dashboard_data, save_dashboard_layout, save_device_to_dashboard, save_widget_to_dashboard},
+    devices::{get_device, get_devices, get_last_value, get_own_device, post_remove_cache, test_exalise_connection},
     misc::{close_splashscreen, get_debiteuren, get_end_answer, get_pdf_file, get_question, get_quiz, write_to_log_file},
     mqtt::{cancel_shutdown, get_exalise_connection, send_message},
     rs232::{get_all_availble_ports, start_file_receive, start_file_send, stop_file_receive, stop_file_send},
@@ -54,7 +54,14 @@ async fn main() {
     let persisted_last_values: HashMap<String, String> =
         load_or_default(&settings_dir.join("last_values.cache.json"));
 
-    let http_client = reqwest::Client::new();
+    // No request in this app previously had a timeout, so a stuck backend (e.g.
+    // a saturated DB connection pool) hung the caller - and the UI - forever
+    // instead of failing fast. get_dashboard_data's single-flight lock means a
+    // hang here blocks every other caller waiting on the same lock, too.
+    let http_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .expect("failed to build HTTP client");
 
     // Optionally pull the remote default dashboard before starting.
     if basic.automatic_load_dashboard == "True" {
@@ -102,6 +109,8 @@ async fn main() {
         http_client,
         mqtt_client: Mutex::new(mqtt_client),
         last_values: RwLock::new(persisted_last_values),
+        device_data: RwLock::new(None),
+        dashboard_fetch_lock: Mutex::new(()),
         config: RwLock::new(AppConfig { exalise, api, basic }),
         mqtt_connected: mqtt_connected.clone(),
         shutdown_pending: Arc::new(AtomicBool::new(false)),
@@ -121,40 +130,21 @@ async fn main() {
         .setup(move |app| {
             let app_handle = app.handle();
 
-            // Pre-populate last-value cache in the background.
+            // Pre-populate the device-data and last-value caches in the background.
             let app_handle_init = app_handle.clone();
             tauri::async_runtime::spawn(async move {
                 let state = app_handle_init.state::<AppState>();
-                initialize_last_values(&state).await;
+                prefetch_dashboard_data(&state).await;
             });
 
             // Periodically persist the (MQTT-updated) in-memory cache to disk, so a
             // future restart has a recent seed to paint the UI with instantly.
             cache_persist::start_periodic_flush(app_handle.clone());
 
-            // Day-off check — runs after the window opens so the countdown dialog can appear.
-            let app_handle_dayoff = app_handle.clone();
-            tauri::async_runtime::spawn(async move {
-                // Brief delay so the window is rendered before we might show the countdown.
-                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                let state = app_handle_dayoff.state::<AppState>();
-                let (http_key, http_secret, device_key) = {
-                    let config = state.config.read().await;
-                    (
-                        config.exalise.http_settings.http_key.clone(),
-                        config.exalise.http_settings.http_secret.clone(),
-                        config.exalise.mqtt_settings.device_key.clone(),
-                    )
-                };
-                mqtt_service::check_day_off(
-                    &state.http_client,
-                    &http_key,
-                    &http_secret,
-                    &device_key,
-                    app_handle_dayoff.clone(),
-                )
-                .await;
-            });
+            // Day-off check now runs from close_splashscreen (misc.rs), invoked
+            // by the frontend once it's actually ready to receive events -
+            // see the comment there for why a fixed post-setup delay wasn't
+            // reliable.
 
             // Start the RS232 monitoring loop.
             let main_window = app.get_window("main").unwrap();
@@ -183,6 +173,7 @@ async fn main() {
         .invoke_handler(tauri::generate_handler![
             // Dashboard
             get_dashboard,
+            get_dashboard_data,
             save_device_to_dashboard,
             save_widget_to_dashboard,
             save_dashboard_layout,
@@ -203,6 +194,7 @@ async fn main() {
             get_own_device,
             get_last_value,
             post_remove_cache,
+            test_exalise_connection,
             // MQTT
             send_message,
             get_exalise_connection,

@@ -1,8 +1,7 @@
 import { Box, Text } from "@chakra-ui/react";
-import { invoke } from "@tauri-apps/api";
-import { UnlistenFn, listen } from "@tauri-apps/api/event";
-import React, { useEffect, useRef, useState } from "react";
-import { emitter } from "../../../../index";
+import React, { useEffect, useState } from "react";
+import { useDeviceValue, useDeviceValueTimestamp } from "../../../../hooks/useDeviceValue";
+import { STATUS_COLOR } from "./widgetTokens";
 
 function convertSecondsToHhMmSs({ time }: { time: number }): string {
   var negative = time < 0 ? true : false;
@@ -30,61 +29,26 @@ interface TimerWidgetProps {
   dataPoints: string[];
 }
 
-const TimerWidget: React.FC<TimerWidgetProps> = ({
-  deviceId,
-  dataPoints,
-  deviceKey,
-}) => {
-  const [value, setValue] = useState("");
+const TimerWidget: React.FC<TimerWidgetProps> = ({ dataPoints, deviceKey }) => {
+  const rawValue = useDeviceValue(deviceKey, dataPoints[0]);
+  const time = useDeviceValueTimestamp(deviceKey, dataPoints[0]);
+  const loading = rawValue === undefined || time === undefined;
+  const value = rawValue ?? "";
+
   const [timer, setTimer] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const alreadyFetched = useRef(false);
 
-  const fetchValue = () => {
-    setLoading(true);
-    invoke("get_last_value", {
-      deviceId,
-      deviceKey,
-      datapointKey: dataPoints[0],
-    })
-      .then((e: any) => {
-        try {
-          let valueJson = JSON.parse(e);
-
-          setValue(valueJson.value as string);
-
-          const oldTime = new Date(valueJson.createdAt).getTime();
-          const newTime = new Date().getTime();
-
-          const difference = newTime - oldTime;
-          setTimer(difference);
-          setLoading(false);
-
-          setInterval(() => {
-            setTimer((i) => i + 1000);
-          }, 1000);
-        } catch (_error) {
-          setLoading(false);
-        }
-      })
-      .catch((_err) => {
-        setLoading(false);
-      });
-  };
+  // Re-baseline elapsed time whenever the underlying value changes (initial
+  // hydration, a live push, or a manual refetch).
+  useEffect(() => {
+    if (time === undefined) return;
+    setTimer(Date.now() - new Date(time).getTime());
+  }, [time]);
 
   useEffect(() => {
-    if (alreadyFetched.current === false) {
-      alreadyFetched.current = true;
-
-      emitter.on("refetch", fetchValue);
-
-      fetchValue();
-
-      listen(`notification---${deviceKey}---${dataPoints[0]}`, (event) => {
-        setValue(event.payload as string);
-        setTimer(0);
-      });
-    }
+    const interval = setInterval(() => {
+      setTimer((i) => i + 1000);
+    }, 1000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
@@ -96,20 +60,33 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
         color="white"
         backgroundColor={
           loading
-            ? "gray.500"
+            ? STATUS_COLOR.idle
             : value.toLowerCase() === "run" ||
               value.toLowerCase() === "herstart"
-            ? "green.400"
+            ? STATUS_COLOR.run
             : value.toLowerCase() === "pauze"
-            ? "orange.400"
-            : "red.400"
+            ? STATUS_COLOR.pause
+            : STATUS_COLOR.stop
         }
-        pr="10px"
+        borderBottomRadius="19px"
+        py="16px"
+        px="24px"
       >
-        <Text fontSize={"40px"}>
+        <Text
+          fontSize={"58px"}
+          fontWeight="extrabold"
+          lineHeight="1"
+          sx={{ fontVariantNumeric: "tabular-nums" }}
+        >
           {loading ? null : convertSecondsToHhMmSs({ time: timer })}
         </Text>
-        <Text fontSize={"30px"} mt={"-10px"}>
+        <Text
+          fontSize={"30px"}
+          fontWeight="bold"
+          letterSpacing="wide"
+          textTransform="uppercase"
+          mt={1}
+        >
           {loading ? "Loading..." : value !== "" ? value : "No data"}
         </Text>
       </Box>

@@ -11,11 +11,16 @@ import {
   Switch,
 } from "@chakra-ui/react";
 import { invoke } from "@tauri-apps/api";
-import { listen } from "@tauri-apps/api/event";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useState } from "react";
 import { formatDate } from "../../../../utils/formatDate";
 import { formatNumberValue } from "../../../../utils/formatValue";
-import { emitter } from "../../../../index";
+import { useDeviceValue, useDeviceValueTimestamp } from "../../../../hooks/useDeviceValue";
+import {
+  STAT_DIVIDER,
+  STAT_LABEL_COLOR,
+  STAT_ROW_MIN_H,
+  STAT_TIMESTAMP_COLOR,
+} from "./widgetTokens";
 
 interface CustomInputWidgetProps {
   deviceId: string;
@@ -29,138 +34,93 @@ interface CustomInputWidgetProps {
 const textSizeCalculate = (text: string) => {
   if (text !== undefined) {
     if (text.length < 11) {
-      return 30;
+      return 26;
     } else if (text.length < 13) {
-      return 27;
+      return 24;
     } else if (text.length < 20) {
-      return 25;
+      return 21;
     } else if (text.length < 26) {
-      return 23;
+      return 19;
     } else if (text.length < 34) {
-      return 20;
+      return 17;
     }
     return 15;
   }
 };
 
 const CustomInputWidget: React.FC<CustomInputWidgetProps> = ({
-  deviceId,
   deviceKey,
   dataPoints,
   types,
   small,
-  name,
 }) => {
-  const functionCalled = useRef(false);
-  const [value, setValue] = useState({
-    value: "",
-    time: "",
-  });
-  const [loading, setLoading] = useState(true);
+  const datapointKey = small !== undefined ? dataPoints[small] : dataPoints[0];
   const [inputValue, setInputValue] = useState("");
 
-  const fetchValue = () => {
-    setLoading(true);
-    invoke("get_last_value", {
-      deviceId,
-      deviceKey,
-      datapointKey: small !== undefined ? dataPoints[small] : dataPoints[0],
-    })
-      .then((e: any) => {
-        try {
-          let valueJson = JSON.parse(e);
-
-          setValue({
-            value: valueJson.value,
-            time: valueJson.createdAt,
-          });
-        } catch (_error) {}
-
-        setLoading(false);
-      })
-      .catch((_err) => {
-        setLoading(false);
-      });
+  const rawValue = useDeviceValue(deviceKey, datapointKey);
+  const time = useDeviceValueTimestamp(deviceKey, datapointKey);
+  const loading = types[0] === undefined || rawValue === undefined;
+  const value = {
+    value: loading ? "" : rawValue,
+    time: time ?? "",
   };
 
-  useEffect(() => {
-    if (types[0] !== undefined) {
-      if (functionCalled.current === false) {
-        functionCalled.current = true;
-
-        emitter.on("refetch", fetchValue);
-
-        fetchValue();
-
-        listen(
-          `notification---${deviceKey}---${
-            small !== undefined ? dataPoints[small] : dataPoints[0]
-          }`,
-          (event) => {
-            setValue({
-              value: event.payload as string,
-              time: new Date().toISOString(),
-            });
-          }
-        );
-      }
-    }
-  }, [types]);
-
   const sendMessage = () => {
-    setLoading(true);
     invoke("send_message", {
       deviceKey,
       datapoint: dataPoints[0],
       value: inputValue,
     })
-      .then((_e) => {
-        setInputValue("");
-        setLoading(false);
-      })
-      .catch((_err) => {
-        setLoading(false);
-      });
+      .then(() => setInputValue(""))
+      .catch(() => {});
   };
 
   return (
     <Flex
       width={"100%"}
-      pr={3}
-      pl={3}
-      maxH="80px"
-      minH={"80px"}
+      pr={6}
+      pl={6}
+      maxH={STAT_ROW_MIN_H}
+      minH={STAT_ROW_MIN_H}
       flexDir={"column"}
       justifyContent={"center"}
-      pt={3}
+      {...STAT_DIVIDER}
     >
       <Stat>
         <Flex alignItems={"center"}>
-          <StatLabel fontSize={"16px"}>{dataPoints[0]}</StatLabel>
+          <StatLabel fontSize={"17px"} fontWeight="medium" color={STAT_LABEL_COLOR} noOfLines={1} flexShrink={1} minW={0}>
+            {dataPoints[0]}
+          </StatLabel>
 
-          <Box ml="auto" textAlign={"right"} maxWidth={"180px"}>
+          <Box ml="auto" textAlign={"right"} maxWidth={"220px"} flexShrink={0}>
             {loading ? (
-              <StatNumber fontSize="20px">Loading...</StatNumber>
+              <StatNumber fontSize="22px" color={STAT_LABEL_COLOR}>
+                Loading...
+              </StatNumber>
             ) : value.value !== undefined && value.value !== "" ? (
-              <Flex alignItems={"center"} mt={-1}>
+              <Flex alignItems={"center"}>
                 <Input
+                  size="lg"
                   placeholder={value.value}
-                  fontSize={`${textSizeCalculate(value.value) - 5}px`}
-                  lineHeight={`${textSizeCalculate(value.value) * 1.2}px`}
+                  fontSize={`${textSizeCalculate(value.value)}px`}
+                  fontWeight="bold"
+                  textAlign="right"
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                 />
-                <Button ml={2} onClick={() => sendMessage()}>
+                <Button size="lg" ml={2} colorScheme="brand" onClick={() => sendMessage()}>
                   Send
                 </Button>
               </Flex>
             ) : (
-              <Flex alignItems={"center"} mt={-1}>
+              <Flex alignItems={"center"}>
                 <Input
+                  size="lg"
+                  textAlign="right"
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                 />
-                <Button ml={2} onClick={() => sendMessage()}>
+                <Button size="lg" ml={2} colorScheme="brand" onClick={() => sendMessage()}>
                   Send
                 </Button>
               </Flex>
@@ -168,7 +128,7 @@ const CustomInputWidget: React.FC<CustomInputWidgetProps> = ({
           </Box>
         </Flex>
         <Flex mt={1}>
-          <StatHelpText fontSize={"12px"} ml="auto">
+          <StatHelpText fontSize={"11px"} color={STAT_TIMESTAMP_COLOR} ml="auto" mb={0}>
             {loading
               ? ""
               : value.value !== "" && value.value !== undefined

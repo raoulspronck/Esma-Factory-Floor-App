@@ -15,6 +15,7 @@ import DisplayWidget from "./DisplayWidget";
 import { WidgetErrorBoundary } from "../../WidgetErrorBoundary";
 import { RiDeleteBin5Fill } from "react-icons/ri";
 import { BiHide } from "react-icons/bi";
+import { useDeviceData } from "../../../hooks/useDeviceData";
 
 interface DeviceWidgetProps {
   deviceBlock: {
@@ -63,8 +64,9 @@ const DeviceWidget: React.FC<DeviceWidgetProps> = ({
 }) => {
   const functionCalled = useRef(false);
 
-  const [dataPoints, setDataPoints] = useState([]);
-  const [connected, setConnected] = useState(null);
+  const deviceData = useDeviceData(deviceBlock.id);
+  const dataPoints = deviceData?.dataPoint ?? [];
+  const [connected, setConnected] = useState<boolean | null>(null);
 
   const [loading, setLoading] = useState(false);
 
@@ -120,16 +122,14 @@ const DeviceWidget: React.FC<DeviceWidgetProps> = ({
       .catch((e) => setLoading(false));
   };
 
+  // Hydrate from the shared cache (populated once by EventManager via
+  // get_dashboard_data). Live "connected"/"disconnected" events below keep it
+  // updated after that.
   useEffect(() => {
-    invoke("get_device", {
-      deviceId: deviceBlock.id,
-    })
-      .then((e) => {
-        setConnected(JSON.parse(e as string).connected);
-        setDataPoints(JSON.parse(e as string).dataPoint);
-      })
-      .catch((er) => console.log(er));
-  }, [deviceBlock.id]);
+    if (deviceData?.connected !== undefined) {
+      setConnected(deviceData.connected);
+    }
+  }, [deviceData?.connected]);
 
   useEffect(() => {
     if (!functionCalled.current) {
@@ -147,43 +147,56 @@ const DeviceWidget: React.FC<DeviceWidgetProps> = ({
 
   return (
     <Box
-      bg="gray.800"
-      borderRadius={"10px"}
+      bgGradient="linear(to-b, gray.800, gray.900)"
+      border="1px solid"
+      borderColor="whiteAlpha.100"
+      borderRadius={"20px"}
       height="100%"
+      overflow="hidden"
+      boxShadow="0 8px 24px rgba(0, 0, 0, 0.35)"
       style={{ userSelect: "none" }}
       position="relative"
     >
       <Flex
         justifyContent={"center"}
         alignItems="center"
-        height={"30px"}
-        maxH="30px"
+        height={"52px"}
+        maxH="52px"
         position={"relative"}
+        borderBottom="1px solid"
+        borderColor="whiteAlpha.100"
+        px={4}
       >
-        <Text fontSize={"20px"}>{deviceBlock.name}</Text>
+        <Text fontSize={"23px"} fontWeight="bold" letterSpacing="wide" noOfLines={1}>
+          {deviceBlock.name}
+        </Text>
         {connected === null || connected === undefined ? null : connected ===
           true ? (
           <Box
-            height={"15px"}
-            width="15px"
-            bgColor={"green"}
+            height={"16px"}
+            width="16px"
+            bgColor={"green.400"}
             borderRadius="50%"
+            boxShadow="0 0 10px 2px rgba(72, 187, 120, 0.8)"
             ml={3}
+            flexShrink={0}
           />
         ) : (
           <Box
-            height={"15px"}
-            width="15px"
-            bgColor={"red"}
+            height={"16px"}
+            width="16px"
+            bgColor={"red.400"}
             borderRadius="50%"
+            boxShadow="0 0 10px 2px rgba(245, 101, 101, 0.8)"
             ml={3}
+            flexShrink={0}
           />
         )}
 
         {layoutChangable ? (
           <IconButton
             position={"absolute"}
-            right={0}
+            right={2}
             icon={<RiDeleteBin5Fill />}
             aria-label="Delete device"
             colorScheme={"red"}
@@ -193,7 +206,7 @@ const DeviceWidget: React.FC<DeviceWidgetProps> = ({
         ) : (
           <IconButton
             position={"absolute"}
-            right={0}
+            right={2}
             icon={<BiHide />}
             aria-label="Hide device"
             colorScheme={"blackAlpha"}

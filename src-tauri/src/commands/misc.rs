@@ -29,6 +29,36 @@ pub async fn close_splashscreen(window: tauri::Window) {
     if let Some(main) = window.get_window("main") {
         let _ = main.show();
     }
+
+    // The frontend only calls this command after loadDashboard/loadSettings
+    // resolve - by which point EventManager (mounted synchronously, before
+    // those async calls even finish) is guaranteed to already be subscribed
+    // to Tauri events. Running the day-off check from here instead of a fixed
+    // delay after setup() means a resulting "shutdown-requested" emit can
+    // never be dropped by a frontend that isn't listening yet - previously,
+    // on a slow boot (e.g. yarn dev re-optimizing Vite deps), the 500ms delay
+    // could fire before EventManager subscribed: the backend's own shutdown
+    // timer still ran on schedule, but the dialog never appeared.
+    let app_handle = window.app_handle();
+    tauri::async_runtime::spawn(async move {
+        let state = app_handle.state::<AppState>();
+        let (http_key, http_secret, device_key) = {
+            let config = state.config.read().await;
+            (
+                config.exalise.http_settings.http_key.clone(),
+                config.exalise.http_settings.http_secret.clone(),
+                config.exalise.mqtt_settings.device_key.clone(),
+            )
+        };
+        crate::services::mqtt_service::check_day_off(
+            &state.http_client,
+            &http_key,
+            &http_secret,
+            &device_key,
+            app_handle.clone(),
+        )
+        .await;
+    });
 }
 
 #[tauri::command]

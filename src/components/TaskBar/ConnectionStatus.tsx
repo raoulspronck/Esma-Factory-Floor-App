@@ -12,6 +12,7 @@ import {
   Text,
 } from "@chakra-ui/react";
 import { invoke } from "@tauri-apps/api";
+import { listen } from "@tauri-apps/api/event";
 import { relaunch } from "@tauri-apps/api/process";
 import { useEffect, useState } from "react";
 import { TfiReload } from "react-icons/tfi";
@@ -24,7 +25,7 @@ import { useConnectionStore } from "../../stores/connectionStore";
 export default function ConnectionStatus() {
   const mqttStatus = useConnectionStore((s) => s.mqttStatus);
 
-  const [pingTime, setPingTime] = useState(0);
+  const [pingTime, setPingTime] = useState(60);
 
   useEffect(() => {
     const interval = setInterval(() => setPingTime((t) => t - 1), 1000);
@@ -34,6 +35,14 @@ export default function ConnectionStatus() {
   useEffect(() => {
     if (pingTime < -60) relaunch();
   }, [pingTime]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen("Ping", () => setPingTime(60)).then((fn) => {
+      unlisten = fn;
+    });
+    return () => unlisten?.();
+  }, []);
 
   return (
     <Flex alignItems="center" width="fit-content" mr={5} color="white">

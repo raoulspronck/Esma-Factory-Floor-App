@@ -1,9 +1,21 @@
 import { invoke } from "@tauri-apps/api";
 import { Dashboard, Device } from "../types";
+import { DeviceData } from "../stores/connectionStore";
 
 export async function getDashboard(): Promise<Dashboard> {
   const raw = await invoke<string>("get_dashboard");
   return JSON.parse(raw);
+}
+
+export interface DashboardDataResult {
+  devices: Record<string, DeviceData>;
+  values: Record<string, string>;
+}
+
+// Single startup call replacing what used to be one `get_device` invoke per
+// device plus one `get_last_value` invoke per widget datapoint.
+export async function getDashboardData(): Promise<DashboardDataResult> {
+  return invoke<DashboardDataResult>("get_dashboard_data");
 }
 
 export async function saveDashboardLayout(dashboard: Dashboard): Promise<void> {

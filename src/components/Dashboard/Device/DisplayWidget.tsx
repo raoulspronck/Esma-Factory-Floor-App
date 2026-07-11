@@ -10,6 +10,7 @@ import TimePredictionWidget from "./Widgets/TimePredictionWidget";
 import SwitchWidget from "./Widgets/SwitchWidget";
 import SliderWidget from "./Widgets/SliderWidget";
 import CustomInputWidget from "./Widgets/CustomInputWidget";
+import { STAT_DIVIDER_COLOR } from "./Widgets/widgetTokens";
 
 interface DisplayWidgetProps {
   deviceKey: string;
@@ -124,42 +125,48 @@ const DisplayWidget: React.FC<DisplayWidgetProps> = ({
   switch (widget.name.split("/")[0]) {
     case "Two Default":
       return (
-        <Flex alignItems={"center"}>
-          {widget.name.split("/")[1] === "Time prediction" ? (
-            <TimePredictionWidget
-              dataPoints={widget.datapoints}
-              deviceKey={deviceKey}
-              deviceId={deviceId}
-              types={type}
-              small={0}
-            />
-          ) : (
-            <DefaultWidget
-              dataPoints={widget.datapoints}
-              deviceKey={deviceKey}
-              deviceId={deviceId}
-              types={type}
-              small={0}
-            />
-          )}
+        <Flex alignItems={"stretch"}>
+          <Box flex="1" minW={0}>
+            {widget.name.split("/")[1] === "Time prediction" ? (
+              <TimePredictionWidget
+                dataPoints={widget.datapoints}
+                deviceKey={deviceKey}
+                deviceId={deviceId}
+                types={type}
+                small={0}
+              />
+            ) : (
+              <DefaultWidget
+                dataPoints={widget.datapoints}
+                deviceKey={deviceKey}
+                deviceId={deviceId}
+                types={type}
+                small={0}
+              />
+            )}
+          </Box>
 
-          {widget.name.split("/")[2] === "Time prediction" ? (
-            <TimePredictionWidget
-              dataPoints={widget.datapoints}
-              deviceKey={deviceKey}
-              deviceId={deviceId}
-              types={type}
-              small={1}
-            />
-          ) : (
-            <DefaultWidget
-              dataPoints={widget.datapoints}
-              deviceKey={deviceKey}
-              deviceId={deviceId}
-              types={type}
-              small={1}
-            />
-          )}
+          <Box width="1px" alignSelf="stretch" bg={STAT_DIVIDER_COLOR} my={4} />
+
+          <Box flex="1" minW={0}>
+            {widget.name.split("/")[2] === "Time prediction" ? (
+              <TimePredictionWidget
+                dataPoints={widget.datapoints}
+                deviceKey={deviceKey}
+                deviceId={deviceId}
+                types={type}
+                small={1}
+              />
+            ) : (
+              <DefaultWidget
+                dataPoints={widget.datapoints}
+                deviceKey={deviceKey}
+                deviceId={deviceId}
+                types={type}
+                small={1}
+              />
+            )}
+          </Box>
 
           {layoutChangable ? (
             <IconButton

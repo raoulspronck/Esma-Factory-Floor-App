@@ -9,3 +9,9 @@ export function useDeviceValue(deviceKey: string, datapointKey: string): string 
   const key = `${deviceKey}---${datapointKey}`;
   return useConnectionStore((s) => s.lastValues[key]);
 }
+
+/** Companion to useDeviceValue: when that value was last updated (ISO string). */
+export function useDeviceValueTimestamp(deviceKey: string, datapointKey: string): string | undefined {
+  const key = `${deviceKey}---${datapointKey}`;
+  return useConnectionStore((s) => s.lastValueTimestamps[key]);
+}

@@ -9,10 +9,17 @@ import {
   Switch,
 } from "@chakra-ui/react";
 import { invoke } from "@tauri-apps/api";
-import { listen } from "@tauri-apps/api/event";
-import React, { useEffect, useRef, useState } from "react";
+import React from "react";
 import { formatDate } from "../../../../utils/formatDate";
 import { formatNumberValue } from "../../../../utils/formatValue";
+import { useDeviceValue, useDeviceValueTimestamp } from "../../../../hooks/useDeviceValue";
+import {
+  STAT_DIVIDER,
+  STAT_LABEL_COLOR,
+  STAT_ROW_MIN_H,
+  STAT_TIMESTAMP_COLOR,
+  STAT_VALUE_COLOR,
+} from "./widgetTokens";
 
 interface SwitchWidgetProps {
   deviceId: string;
@@ -23,75 +30,40 @@ interface SwitchWidgetProps {
   name?: string;
 }
 
+// Sized so a value fits its column (shared with the toggle) on one line;
+// noOfLines={1} ellipsizes anything longer instead of wrapping.
 const textSizeCalculate = (text: string) => {
   if (text.length < 11) {
     return 30;
   } else if (text.length < 13) {
-    return 27;
-  } else if (text.length < 20) {
     return 25;
+  } else if (text.length < 20) {
+    return 18;
   } else if (text.length < 26) {
-    return 23;
+    return 15;
   } else if (text.length < 34) {
-    return 20;
+    return 13;
   }
-  return 15;
+  return 11;
 };
 
+const halfSizeCalculate = (text: string) => Math.max(textSizeCalculate(text) - 4, 14);
+
 const SwitchWidget: React.FC<SwitchWidgetProps> = ({
-  deviceId,
   deviceKey,
   dataPoints,
-  types,
   small,
   name,
 }) => {
-  const functionCalled = useRef(false);
-  const [value, setValue] = useState({
-    value: "",
-    time: "",
-  });
-  const [loading, setLoading] = useState(false);
+  const datapointKey = small !== undefined ? dataPoints[small] : dataPoints[0];
 
-  useEffect(() => {
-    if (!functionCalled.current) {
-      setLoading(true);
-      invoke("get_last_value", {
-        deviceId,
-        deviceKey,
-        datapointKey: small !== undefined ? dataPoints[small] : dataPoints[0],
-      })
-        .then((e: any) => {
-          try {
-            let valueJson = JSON.parse(e);
-
-            setValue({
-              value: valueJson.value,
-              time: valueJson.createdAt,
-            });
-          } catch (_error) {}
-
-          setLoading(false);
-        })
-        .catch((_err) => {
-          setLoading(false);
-        });
-
-      listen(
-        `notification---${deviceKey}---${
-          small !== undefined ? dataPoints[small] : dataPoints[0]
-        }`,
-        (event) => {
-          setValue({
-            value: event.payload as string,
-            time: new Date().toISOString(),
-          });
-        }
-      );
-
-      functionCalled.current = true;
-    }
-  }, [types]);
+  const rawValue = useDeviceValue(deviceKey, datapointKey);
+  const time = useDeviceValueTimestamp(deviceKey, datapointKey);
+  const loading = rawValue === undefined;
+  const value = {
+    value: loading ? "" : rawValue,
+    time: time ?? "",
+  };
 
   const switchChanged = () => {
     invoke("send_message", {
@@ -105,32 +77,40 @@ const SwitchWidget: React.FC<SwitchWidgetProps> = ({
 
   if (small !== undefined) {
     return (
-      <Box width={"100%"} pr={3} pl={3} maxH="80px" minH={"80px"}>
+      <Box width={"100%"} pr={4} pl={4} maxH="92px" minH={"92px"} {...STAT_DIVIDER}>
         <Stat>
           <Flex
             alignItems={"start"}
             flexDir={"column"}
-            maxH="80px"
-            height={"80px"}
+            maxH="92px"
+            height={"92px"}
+            justifyContent="center"
             position={"relative"}
           >
             {name && name !== "" ? (
-              <StatLabel fontSize={"13px"}>{name}</StatLabel>
+              <StatLabel fontSize={"14px"} fontWeight="medium" color={STAT_LABEL_COLOR} noOfLines={1}>
+                {name}
+              </StatLabel>
             ) : (
-              <StatLabel fontSize={"13px"}>{dataPoints[small]}</StatLabel>
+              <StatLabel fontSize={"14px"} fontWeight="medium" color={STAT_LABEL_COLOR} noOfLines={1}>
+                {dataPoints[small]}
+              </StatLabel>
             )}
 
             {loading ? (
-              <StatNumber fontSize="20px">Loading...</StatNumber>
+              <StatNumber fontSize="22px" color={STAT_VALUE_COLOR}>
+                Loading...
+              </StatNumber>
             ) : value.value !== "" ? (
-              <Flex alignItems={"center"} mt={-1}>
+              <Flex alignItems={"center"} mt={0.5} width="100%">
                 <StatNumber
-                  fontSize={`${textSizeCalculate(value.value) - 5}px`}
-                  lineHeight={`${textSizeCalculate(value.value) * 1.2}px`}
-                  textOverflow="ellipsis"
-                  wordBreak={"break-word"}
-                  whiteSpace={"break-spaces"}
+                  fontSize={`${halfSizeCalculate(value.value)}px`}
+                  fontWeight="bold"
+                  color={STAT_VALUE_COLOR}
+                  lineHeight="1.15"
+                  noOfLines={1}
                   mr={2}
+                  minW={0}
                 >
                   {value.value}
                 </StatNumber>
@@ -143,9 +123,17 @@ const SwitchWidget: React.FC<SwitchWidgetProps> = ({
                 />
               </Flex>
             ) : (
-              <StatNumber fontSize="20px">No data</StatNumber>
+              <StatNumber fontSize="22px" color={STAT_VALUE_COLOR}>
+                No data
+              </StatNumber>
             )}
-            <StatHelpText fontSize={"10px"} position={"absolute"} bottom={0}>
+            <StatHelpText
+              fontSize={"10px"}
+              color={STAT_TIMESTAMP_COLOR}
+              position={"absolute"}
+              bottom={1}
+              m={0}
+            >
               {loading ? "" : value.value !== "" ? formatDate(value.time) : ""}
             </StatHelpText>
           </Flex>
@@ -155,23 +143,28 @@ const SwitchWidget: React.FC<SwitchWidgetProps> = ({
   }
 
   return (
-    <Box width={"100%"} pr={5} pl={5} maxH="80px" minH={"80px"}>
-      <Stat>
+    <Box width={"100%"} pr={6} pl={6} maxH={STAT_ROW_MIN_H} minH={STAT_ROW_MIN_H} {...STAT_DIVIDER}>
+      <Stat height="100%" display="flex" flexDir="column" justifyContent="center">
         <Flex alignItems={"center"}>
-          <StatLabel fontSize={"16px"}>{dataPoints[0]}</StatLabel>
+          <StatLabel fontSize={"17px"} fontWeight="medium" color={STAT_LABEL_COLOR} noOfLines={1} flexShrink={1} minW={0}>
+            {dataPoints[0]}
+          </StatLabel>
 
-          <Box ml="auto" textAlign={"right"} maxWidth={"180px"}>
+          <Box ml="auto" textAlign={"right"} maxWidth={"220px"} flexShrink={0}>
             {loading ? (
-              <StatNumber fontSize="30px">Loading...</StatNumber>
+              <StatNumber fontSize="32px" color={STAT_VALUE_COLOR}>
+                Loading...
+              </StatNumber>
             ) : value.value !== "" ? (
               <Flex alignItems={"center"}>
                 <StatNumber
                   fontSize={`${textSizeCalculate(value.value)}px`}
-                  lineHeight={`${textSizeCalculate(value.value) * 1.2}px`}
-                  textOverflow="ellipsis"
-                  wordBreak={"break-word"}
-                  whiteSpace={"break-spaces"}
+                  lineHeight={`${textSizeCalculate(value.value) * 1.15}px`}
+                  fontWeight="bold"
+                  color={STAT_VALUE_COLOR}
+                  noOfLines={1}
                   mr={2}
+                  minW={0}
                 >
                   {value.value.toUpperCase()}
                 </StatNumber>
@@ -184,12 +177,14 @@ const SwitchWidget: React.FC<SwitchWidgetProps> = ({
                 />
               </Flex>
             ) : (
-              <StatNumber fontSize="30px">No data</StatNumber>
+              <StatNumber fontSize="32px" color={STAT_VALUE_COLOR}>
+                No data
+              </StatNumber>
             )}
           </Box>
         </Flex>
         <Flex mt={1}>
-          <StatHelpText fontSize={"12px"} ml="auto">
+          <StatHelpText fontSize={"11px"} color={STAT_TIMESTAMP_COLOR} ml="auto" mb={0}>
             {loading ? "" : value.value !== "" ? formatDate(value.time) : ""}
           </StatHelpText>
         </Flex>

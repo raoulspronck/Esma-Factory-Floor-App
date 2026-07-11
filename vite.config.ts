@@ -10,6 +10,13 @@ export default defineConfig({
     strictPort: true,
     // Don't open a browser tab; Tauri handles the window
     open: false,
+    watch: {
+      // Cargo writes/locks files under src-tauri/target while compiling; if
+      // Vite's watcher picks one up mid-write (e.g. the linker writing the
+      // .exe on a fresh `target/`), Windows throws EBUSY and kills `tauri dev`
+      // on the very first run. src-tauri isn't frontend source anyway.
+      ignored: ["**/src-tauri/**"],
+    },
   },
 
   // Production output goes to dist/ (Tauri reads this via distDir)
