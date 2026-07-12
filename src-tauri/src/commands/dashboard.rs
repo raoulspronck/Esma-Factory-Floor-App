@@ -188,6 +188,13 @@ pub async fn prefetch_dashboard_data(state: &AppState) {
 /// callers on a cold cache share one in-flight fetch instead of firing one
 /// each - this single call replaces both the old one-`get_device`-per-device
 /// fan-out and the one-`get_last_value`-per-widget fan-out.
+///
+/// A failed fetch never propagates as an error here: `values` is already
+/// seeded from `last_values.cache.json` at startup (and kept current by
+/// MQTT), so one transient HTTP failure - e.g. network not up yet right
+/// after Windows-login autostart - used to blank the entire dashboard
+/// instead of just leaving `devices` (connected status/shape) empty until
+/// the next retry succeeds.
 #[tauri::command(async)]
 pub async fn get_dashboard_data(state: State<'_, AppState>) -> Result<DashboardDataOut, AppError> {
     let devices = if let Some(data) = state.device_data.read().await.clone() {
@@ -197,7 +204,16 @@ pub async fn get_dashboard_data(state: State<'_, AppState>) -> Result<DashboardD
         if let Some(data) = state.device_data.read().await.clone() {
             data
         } else {
-            fetch_dashboard_data(&state).await?
+            match fetch_dashboard_data(&state).await {
+                Ok(data) => data,
+                Err(e) => {
+                    append_log(
+                        &state,
+                        &format!("get_dashboard_data: fetch failed, returning cached values with empty device data: {}", e),
+                    );
+                    serde_json::json!({})
+                }
+            }
         }
     };
 

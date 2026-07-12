@@ -89,12 +89,20 @@ const ConfigurableDashboard: React.FC = () => {
     <Box
       height={"100%"}
       width="100%"
-      pt={2}
       position="relative"
       bgColor={"black"}
       color="white"
+      display="flex"
+      flexDirection="column"
     >
-      <Box height={"calc(100% - 150px)"} width="100%" ref={gridContainerRef}>
+      <Box
+        flex="1"
+        minHeight={0}
+        pt={2}
+        width="100%"
+        overflowY="auto"
+        ref={gridContainerRef}
+      >
         {dashboard.layout.length > 0 ? (
           <GridLayout
             className="layout"

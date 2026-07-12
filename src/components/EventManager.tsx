@@ -113,9 +113,18 @@ export default function EventManager(): null {
   }, [dashboard.devices]);
 
   useEffect(() => {
-    const fetchDashboardData = () => {
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const fetchDashboardData = (attempt = 0) => {
+      if (retryTimer !== undefined) {
+        clearTimeout(retryTimer);
+        retryTimer = undefined;
+      }
+
       getDashboardData()
         .then(({ devices, values }) => {
+          if (cancelled) return;
           setDeviceData(devices);
 
           // Each entry in `values` is the same JSON-wrapped shape the old
@@ -134,7 +143,16 @@ export default function EventManager(): null {
           setLastValues(rawValues);
           setLastValueTimestamps(timestamps);
         })
-        .catch(console.error);
+        .catch((err) => {
+          console.error(err);
+          if (cancelled) return;
+          // Fetch failures right after launch are usually transient (network
+          // not up yet post Windows-login autostart) - back off and retry
+          // instead of leaving the dashboard permanently blank until the
+          // user notices and clicks "Refetch" themselves.
+          const delay = Math.min(2000 * 2 ** attempt, 30000);
+          retryTimer = setTimeout(() => fetchDashboardData(attempt + 1), delay);
+        });
     };
 
     // Initial hydration - one call instead of one `get_device` per device plus
@@ -143,8 +161,13 @@ export default function EventManager(): null {
 
     // The taskbar's "Refetch" button clears the backend cache then emits this;
     // re-running the same fetch repopulates both stores from fresh data.
-    emitter.on("refetch", fetchDashboardData);
-    return () => emitter.off("refetch", fetchDashboardData);
+    const onRefetch = () => fetchDashboardData();
+    emitter.on("refetch", onRefetch);
+    return () => {
+      cancelled = true;
+      if (retryTimer !== undefined) clearTimeout(retryTimer);
+      emitter.off("refetch", onRefetch);
+    };
   }, [setDeviceData, setLastValues, setLastValueTimestamps]);
 
   return null;

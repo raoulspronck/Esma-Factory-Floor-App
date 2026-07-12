@@ -40,6 +40,7 @@ const QuickToolBar: React.FC<{ children?: React.ReactNode }> = ({
       bgColor={"gray.900"}
       alignItems="center"
       pl="5"
+      pr="5"
     >
       {children}
 
