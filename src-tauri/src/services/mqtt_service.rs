@@ -70,12 +70,14 @@ pub fn start_mqtt_loop(
 
                         if vec_topic[1] == "messages" {
                             if vec_topic.len() == 3 {
-                                // Short topic: exalise/messages/{DATAPOINT}
+                                // Short topic: exalise/messages/{DATAPOINT}. Always
+                                // relayed to the frontend (alerts/monitoring want
+                                // everything), but never cached: with no device
+                                // segment there's nothing to validate it against, and
+                                // nothing in this app ever reads a bare-key entry back
+                                // out of last_values.
                                 let event_name = format!("notification---{}", vec_topic[2]);
                                 let _ = main_window.emit(&event_name, &payload);
-
-                                let state = app_handle.state::<AppState>();
-                                state.update_last_value(vec_topic[2], &payload).await;
                             } else if vec_topic.len() >= 4 {
                                 // Long topic: exalise/messages/{DEVICE}/{DATAPOINT_KEY}
                                 let msg_device_key = vec_topic[2];
@@ -93,8 +95,15 @@ pub fn start_mqtt_loop(
                                 let event_name = format!("notification---{}", cache_key);
                                 let _ = main_window.emit(&event_name, &payload);
 
+                                // The broker delivers retained messages from every
+                                // device under exalise/messages/#, including ones this
+                                // installation doesn't own - only persist ones for
+                                // devices actually in this dashboard (or this kiosk's
+                                // own master key) into last_values/the disk cache.
                                 let state = app_handle.state::<AppState>();
-                                state.update_last_value(&cache_key, &payload).await;
+                                if state.known_device_keys.read().await.contains(msg_device_key) {
+                                    state.update_last_value(&cache_key, &payload).await;
+                                }
                             }
                         } else if vec_topic[1] == "lastwill" {
                             let event_name = format!("notification---{}", vec_topic[2]);

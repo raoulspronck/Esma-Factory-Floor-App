@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -22,6 +22,15 @@ pub struct AppState {
     /// Serializes concurrent `get_dashboard_data` callers so a cache miss triggers
     /// exactly one HTTP fetch instead of one per caller.
     pub dashboard_fetch_lock: Mutex<()>,
+    /// Device keys this installation actually owns: every `device.key` in the
+    /// current dashboard plus this kiosk's own master `device_key`. The MQTT
+    /// event loop subscribes to `exalise/messages/#` (needed so the frontend can
+    /// see all traffic for alerts/monitoring), which also delivers retained
+    /// messages from unrelated devices on the broker - this set is used to keep
+    /// those out of `last_values`/the persisted cache without dropping the
+    /// events the frontend receives. Refreshed on startup and whenever the
+    /// dashboard is saved.
+    pub known_device_keys: RwLock<HashSet<String>>,
     /// All user-editable configuration. Write-locked when saving; reading is cheap.
     pub config: RwLock<AppConfig>,
     /// True while the MQTT broker connection is active.

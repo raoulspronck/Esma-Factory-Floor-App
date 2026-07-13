@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -8,6 +8,30 @@ use crate::error::AppError;
 use crate::commands::misc::append_log;
 use crate::models::dashboard::{Dashboard, Device, Layout, ValueResponse};
 use crate::state::AppState;
+
+/// The set of device keys this installation actually owns, given a dashboard's
+/// devices and the kiosk's own master device key. See `AppState::known_device_keys`.
+pub fn known_keys_from_dashboard(dashboard: &Dashboard, master_device_key: &str) -> HashSet<String> {
+    let mut keys: HashSet<String> = dashboard.devices.iter().map(|d| d.key.clone()).collect();
+    keys.insert(master_device_key.to_string());
+    keys
+}
+
+/// Reads `dashboard.exalise.json` from disk and derives `known_device_keys` from
+/// it - used at startup, before `AppState` exists to hold an in-memory `Dashboard`.
+pub fn compute_known_device_keys(settings_dir: &std::path::Path, master_device_key: &str) -> HashSet<String> {
+    let path = settings_dir.join("dashboard.exalise.json");
+    let dashboard: Dashboard = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
+    known_keys_from_dashboard(&dashboard, master_device_key)
+}
+
+async fn refresh_known_device_keys(dashboard: &Dashboard, state: &AppState) {
+    let master_device_key = state.config.read().await.exalise.mqtt_settings.device_key.clone();
+    *state.known_device_keys.write().await = known_keys_from_dashboard(dashboard, &master_device_key);
+}
 
 #[derive(Deserialize)]
 struct DashboardDataResponse {
@@ -57,6 +81,7 @@ pub async fn save_device_to_dashboard(
     dashboard.layout.push(layout);
 
     save_json(&path, &dashboard)?;
+    refresh_known_device_keys(&dashboard, &state).await;
     Ok(dashboard)
 }
 
@@ -67,6 +92,7 @@ pub async fn save_widget_to_dashboard(
 ) -> Result<Dashboard, AppError> {
     let path = state.settings_dir.join("dashboard.exalise.json");
     save_json(&path, &dashboard)?;
+    refresh_known_device_keys(&dashboard, &state).await;
     Ok(dashboard)
 }
 
@@ -77,6 +103,7 @@ pub async fn save_dashboard_layout(
 ) -> Result<String, AppError> {
     let path = state.settings_dir.join("dashboard.exalise.json");
     save_json(&path, &dashboard)?;
+    refresh_known_device_keys(&dashboard, &state).await;
     Ok("saved".into())
 }
 

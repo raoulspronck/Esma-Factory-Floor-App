@@ -20,7 +20,7 @@ use tokio::sync::{Mutex, RwLock};
 use tokio::time::Duration;
 
 use crate::commands::{
-    dashboard::{get_dashboard, get_dashboard_data, prefetch_dashboard_data, save_dashboard_layout, save_device_to_dashboard, save_widget_to_dashboard},
+    dashboard::{compute_known_device_keys, get_dashboard, get_dashboard_data, prefetch_dashboard_data, save_dashboard_layout, save_device_to_dashboard, save_widget_to_dashboard},
     devices::{get_device, get_devices, get_last_value, get_own_device, post_remove_cache, test_exalise_connection},
     misc::{close_splashscreen, get_debiteuren, get_end_answer, get_pdf_file, get_question, get_quiz, write_to_log_file},
     mqtt::{cancel_shutdown, get_exalise_connection, send_message},
@@ -53,6 +53,11 @@ async fn main() {
     // immediately on window-open, before the fresh fetch in initialize_last_values completes.
     let persisted_last_values: HashMap<String, String> =
         load_or_default(&settings_dir.join("last_values.cache.json"));
+
+    // Device keys this installation actually owns - used to keep retained MQTT
+    // messages from unrelated devices on the broker out of last_values/the
+    // persisted cache. See AppState::known_device_keys.
+    let known_device_keys = compute_known_device_keys(&settings_dir, &exalise.mqtt_settings.device_key);
 
     // No request in this app previously had a timeout, so a stuck backend (e.g.
     // a saturated DB connection pool) hung the caller - and the UI - forever
@@ -111,6 +116,7 @@ async fn main() {
         last_values: RwLock::new(persisted_last_values),
         device_data: RwLock::new(None),
         dashboard_fetch_lock: Mutex::new(()),
+        known_device_keys: RwLock::new(known_device_keys),
         config: RwLock::new(AppConfig { exalise, api, basic }),
         mqtt_connected: mqtt_connected.clone(),
         shutdown_pending: Arc::new(AtomicBool::new(false)),

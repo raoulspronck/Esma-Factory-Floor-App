@@ -127,18 +127,27 @@ export default function EventManager(): null {
           if (cancelled) return;
           setDeviceData(devices);
 
-          // Each entry in `values` is the same JSON-wrapped shape the old
-          // per-widget get_last_value calls used to return
-          // (`{id, value, key, createdAt}`, stringified). Unwrap into the
-          // plain-value/timestamp cache widgets read reactively.
+          // Most entries in `values` are the JSON-wrapped shape the old
+          // per-widget get_last_value calls used to return (`{id, value, key,
+          // createdAt}`, stringified) - but any datapoint touched by a live
+          // MQTT update since the last HTTP fetch holds the raw, unwrapped
+          // payload instead (mqtt_service.rs caches payloads as-is). Unwrap
+          // when it's the wrapped shape; otherwise treat the string itself as
+          // the value, same as the live `notification---*` listener below does.
           const rawValues: Record<string, string> = {};
           const timestamps: Record<string, string> = {};
           for (const [key, wrapped] of Object.entries(values)) {
             try {
               const parsed = JSON.parse(wrapped);
-              rawValues[key] = parsed.value;
-              if (parsed.createdAt) timestamps[key] = parsed.createdAt;
-            } catch (_) {}
+              if (parsed && typeof parsed === "object" && "value" in parsed) {
+                rawValues[key] = parsed.value;
+                if (parsed.createdAt) timestamps[key] = parsed.createdAt;
+              } else {
+                rawValues[key] = wrapped;
+              }
+            } catch (_) {
+              rawValues[key] = wrapped;
+            }
           }
           setLastValues(rawValues);
           setLastValueTimestamps(timestamps);

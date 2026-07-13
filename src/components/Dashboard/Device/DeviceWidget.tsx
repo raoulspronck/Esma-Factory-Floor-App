@@ -156,8 +156,11 @@ const DeviceWidget: React.FC<DeviceWidgetProps> = ({
       boxShadow="0 8px 24px rgba(0, 0, 0, 0.35)"
       style={{ userSelect: "none" }}
       position="relative"
+      display="flex"
+      flexDirection="column"
     >
       <Flex
+        flexShrink={0}
         justifyContent={"center"}
         alignItems="center"
         height={"52px"}
@@ -217,32 +220,35 @@ const DeviceWidget: React.FC<DeviceWidgetProps> = ({
         )}
       </Flex>
 
-      {deviceBlock.widgets.length > 0
-        ? deviceBlock.widgets.map((e) => (
-            <WidgetErrorBoundary key={e.id} widgetName={e.widget_type ?? e.type ?? "Widget"}>
-              <DisplayWidget
-                widget={e}
-                deviceKey={deviceBlock.key}
-                deviceId={deviceBlock.id}
-                layoutChangable={layoutChangable}
-                setDashboard={setDashboard}
-                dashboard={dashboard}
-                setRefresh={setRefresh}
-                dataPoints={dataPoints}
-              />
-            </WidgetErrorBoundary>
-          ))
-        : null}
+      <Box flex="1" minH={0} overflowY="auto" className="notdraggable">
+        {deviceBlock.widgets.length > 0
+          ? deviceBlock.widgets.map((e) => (
+              <WidgetErrorBoundary key={e.id} widgetName={e.widget_type ?? e.type ?? "Widget"}>
+                <DisplayWidget
+                  widget={e}
+                  deviceKey={deviceBlock.key}
+                  deviceId={deviceBlock.id}
+                  layoutChangable={layoutChangable}
+                  setDashboard={setDashboard}
+                  dashboard={dashboard}
+                  setRefresh={setRefresh}
+                  dataPoints={dataPoints}
+                />
+              </WidgetErrorBoundary>
+            ))
+          : null}
+      </Box>
 
       {login ? (
         <Flex
-          position={"absolute"}
-          bottom={0}
+          flexShrink={0}
           justifyContent={"center"}
           alignItems="center"
           height={"30px"}
           maxH="30px"
           width={"100%"}
+          borderTop="1px solid"
+          borderColor="whiteAlpha.100"
         >
           <Button
             className="notdraggable"

@@ -10,6 +10,8 @@ import {
 } from "@chakra-ui/react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import GridLayout from "react-grid-layout";
+import "react-grid-layout/css/styles.css";
+import "react-resizable/css/styles.css";
 import { MdAddToQueue } from "react-icons/md";
 import AddDevicesToDashboardModal from "../components/Dashboard/AddDevicesToDashboardModal";
 import DeviceWidget from "../components/Dashboard/Device/DeviceWidget";
@@ -19,6 +21,16 @@ import { useDashboardStore } from "../stores/dashboardStore";
 import { useUiStore } from "../stores/uiStore";
 import { Dashboard } from "../types";
 import { WidgetErrorBoundary } from "../components/WidgetErrorBoundary";
+
+// Each device card needs at least 1 row for its header plus whatever each of
+// its widgets was budgeted at creation time (widget.height — see
+// WidgetModal.tsx's saveSettings). Enforcing this as the grid item's minH
+// stops a drag-resize from shrinking a card below what its own content
+// needs, which is what was causing widgets to get clipped/overflow.
+const HEADER_ROW_UNITS = 1;
+
+const getMinCardHeight = (widgets: { height?: number }[]) =>
+  HEADER_ROW_UNITS + widgets.reduce((sum, w) => sum + (w.height ?? 1), 0);
 
 const ConfigurableDashboard: React.FC = () => {
   const dashboard = useDashboardStore((s) => s.dashboard);
@@ -99,6 +111,7 @@ const ConfigurableDashboard: React.FC = () => {
         flex="1"
         minHeight={0}
         pt={2}
+        pb={layoutChangable ? "88px" : 0}
         width="100%"
         overflowY="auto"
         ref={gridContainerRef}
@@ -124,7 +137,11 @@ const ConfigurableDashboard: React.FC = () => {
                 return (
                   <div
                     key={e.id}
-                    data-grid={dashboard.layout.filter((i) => i.i === e.id)[0]}
+                    data-grid={{
+                      ...dashboard.layout.filter((i) => i.i === e.id)[0],
+                      minW: 1,
+                      minH: getMinCardHeight(e.widgets),
+                    }}
                   >
                     <WidgetErrorBoundary widgetName={e.name ?? e.key}>
                       <DeviceWidget
