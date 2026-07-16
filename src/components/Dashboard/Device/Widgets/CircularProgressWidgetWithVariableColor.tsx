@@ -7,6 +7,7 @@ import {
 } from "@chakra-ui/react";
 import React, { useEffect, useState } from "react";
 import { useDeviceValue } from "../../../../hooks/useDeviceValue";
+import { useElementSize } from "../../../../hooks/useElementSize";
 
 interface CircularProgressWidgetWithVariableColorProps {
   deviceId: string;
@@ -28,6 +29,8 @@ const CircularProgressWidgetWithVariableColor: React.FC<
   const color = (rawColor ?? "none").toLowerCase();
 
   const [realColor, setRealColor] = useState("none");
+  const [containerRef, { width, height }] = useElementSize<HTMLDivElement>();
+  const diameter = Math.max(Math.min(width, height) - 24, 64);
 
   useEffect(() => {
     let interval: any;
@@ -50,13 +53,13 @@ const CircularProgressWidgetWithVariableColor: React.FC<
   }, [color]);
 
   return (
-    <Flex justifyContent={"center"} pb={6} pt={6}>
+    <Flex ref={containerRef} justifyContent={"center"} alignItems="center" width="100%" height="100%">
       {loading ? (
         <Text fontSize="30px">Loading...</Text>
       ) : (
         <CircularProgress
           value={(value / maxValue) * 100}
-          size="208px"
+          size={`${diameter}px`}
           thickness="10px"
           color={`${realColor}.400`}
           trackColor="whiteAlpha.200"
@@ -68,11 +71,11 @@ const CircularProgressWidgetWithVariableColor: React.FC<
           <CircularProgressLabel color="white">
             <Flex justifyContent={"center"}>
               <Box width={"fit-content"}>
-                <Text fontSize={"56px"} fontWeight="extrabold" lineHeight="1">
+                <Text fontSize={`${Math.round(diameter * 0.27)}px`} fontWeight="extrabold" lineHeight="1">
                   {value}
                 </Text>
                 <Text
-                  fontSize={"28px"}
+                  fontSize={`${Math.round(diameter * 0.13)}px`}
                   fontWeight="semibold"
                   color="whiteAlpha.700"
                   pt={1}

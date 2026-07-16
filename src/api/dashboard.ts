@@ -8,7 +8,10 @@ export async function getDashboard(): Promise<Dashboard> {
 }
 
 export interface DashboardDataResult {
-  devices: Record<string, DeviceData>;
+  // `null` means the backend's upstream fetch failed and it has no cached
+  // snapshot — keep current device shapes and retry later. `{}` is a
+  // genuinely empty dashboard.
+  devices: Record<string, DeviceData> | null;
   values: Record<string, string>;
 }
 

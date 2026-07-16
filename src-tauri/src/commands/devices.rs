@@ -3,6 +3,7 @@ use tauri::State;
 
 use crate::commands::misc::append_log;
 use crate::error::AppError;
+use crate::services::http::read_api_response;
 use crate::state::AppState;
 
 const EXALISE_API: &str = "https://api.exalise.com/api";
@@ -123,14 +124,10 @@ pub async fn get_devices(state: State<'_, AppState>) -> Result<String, AppError>
         }
     };
 
-    let text = match response.text().await {
-        Ok(text) => text,
-        Err(e) => {
-            append_log(&state, &format!("get_devices response read failed: {}", e));
-            return Err(AppError::Http(e));
-        }
-    };
-    Ok(text)
+    read_api_response(response).await.map_err(|e| {
+        append_log(&state, &format!("get_devices failed: {}", e));
+        e
+    })
 }
 
 #[tauri::command(async)]
@@ -156,14 +153,10 @@ pub async fn get_device(
         }
     };
 
-    let text = match response.text().await {
-        Ok(text) => text,
-        Err(e) => {
-            append_log(&state, &format!("get_device response read failed for {}: {}", device_id, e));
-            return Err(AppError::Http(e));
-        }
-    };
-    Ok(text)
+    read_api_response(response).await.map_err(|e| {
+        append_log(&state, &format!("get_device failed for {}: {}", device_id, e));
+        e
+    })
 }
 
 #[tauri::command(async)]
@@ -186,14 +179,10 @@ pub async fn get_own_device(state: State<'_, AppState>) -> Result<String, AppErr
         }
     };
 
-    let text = match response.text().await {
-        Ok(text) => text,
-        Err(e) => {
-            append_log(&state, &format!("get_own_device response read failed: {}", e));
-            return Err(AppError::Http(e));
-        }
-    };
-    Ok(text)
+    read_api_response(response).await.map_err(|e| {
+        append_log(&state, &format!("get_own_device failed: {}", e));
+        e
+    })
 }
 
 #[tauri::command(async)]
@@ -250,17 +239,17 @@ pub async fn get_last_value(
         }
     };
 
-    let value = match response.text().await {
+    let value = match read_api_response(response).await {
         Ok(text) => text,
         Err(e) => {
             append_log(
                 &state,
                 &format!(
-                    "get_last_value response read failed for {}/{}: {}",
+                    "get_last_value failed for {}/{}: {}",
                     device_id, datapoint_key, e
                 ),
             );
-            return Err(AppError::Http(e));
+            return Err(e);
         }
     };
 

@@ -85,10 +85,19 @@ impl Default for ApiSettings {
     }
 }
 
+fn default_dashboard_rows() -> u32 {
+    7
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct BasicSettings {
     pub gesture_control: String,
     pub automatic_load_dashboard: String,
+    /// Rows per device strip on the dashboard grid — per-machine, so each
+    /// screen size can pick how dense the grid should be. Defaulted so
+    /// pre-existing basic.settings.json files still parse.
+    #[serde(default = "default_dashboard_rows")]
+    pub dashboard_rows: u32,
 }
 
 impl Default for BasicSettings {
@@ -96,6 +105,7 @@ impl Default for BasicSettings {
         BasicSettings {
             gesture_control: "False".into(),
             automatic_load_dashboard: "True".into(),
+            dashboard_rows: default_dashboard_rows(),
         }
     }
 }

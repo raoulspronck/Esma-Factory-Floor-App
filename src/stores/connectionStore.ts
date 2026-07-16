@@ -29,7 +29,7 @@ interface ConnectionState {
   lastValueTimestamps: Record<string, string>;
 
   // Device shape (connected status + datapoint definitions) keyed by device id,
-  // hydrated once from `get_dashboard_data` instead of each DeviceWidget
+  // hydrated once from `get_dashboard_data` instead of each WidgetCell
   // fetching its own device via `get_device`.
   deviceData: Record<string, DeviceData>;
 

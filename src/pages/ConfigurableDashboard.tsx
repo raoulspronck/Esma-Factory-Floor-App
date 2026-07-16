@@ -1,44 +1,31 @@
-/* eslint no-unused-vars: 0 */
-
-import {
-  Box,
-  Button,
-  Flex,
-  IconButton,
-  Text,
-  useDisclosure,
-} from "@chakra-ui/react";
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import GridLayout from "react-grid-layout";
+import { Box, Flex, Icon, IconButton, Text, useDisclosure } from "@chakra-ui/react";
+import React, { useCallback, useState } from "react";
+import GridLayout, { Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
-import { MdAddToQueue } from "react-icons/md";
-import AddDevicesToDashboardModal from "../components/Dashboard/AddDevicesToDashboardModal";
-import DeviceWidget from "../components/Dashboard/Device/DeviceWidget";
+import { MdAddToQueue, MdCheck } from "react-icons/md";
+import AddDeviceModal from "../components/ViewMenu/addDeviceModal";
+import DeviceColumn from "../components/Dashboard/Device/DeviceColumn";
+import WidgetModal from "../components/Dashboard/Device/WidgetModal";
 import QuickToolBar from "../components/QuickToolBar/QuickToolBar";
 
+import { useElementSize } from "../hooks/useElementSize";
 import { useDashboardStore } from "../stores/dashboardStore";
 import { useUiStore } from "../stores/uiStore";
 import { Dashboard } from "../types";
-import { WidgetErrorBoundary } from "../components/WidgetErrorBoundary";
+import { deviceColor } from "../utils/deviceColor";
+import { MAX_DEVICES } from "../utils/gridPacking";
 
-// Each device card needs at least 1 row for its header plus whatever each of
-// its widgets was budgeted at creation time (widget.height — see
-// WidgetModal.tsx's saveSettings). Enforcing this as the grid item's minH
-// stops a drag-resize from shrinking a card below what its own content
-// needs, which is what was causing widgets to get clipped/overflow.
-const HEADER_ROW_UNITS = 1;
-
-const getMinCardHeight = (widgets: { height?: number }[]) =>
-  HEADER_ROW_UNITS + widgets.reduce((sum, w) => sum + (w.height ?? 1), 0);
+const COLUMN_GAP = 8;
+const EMPTY_SLOT_PREFIX = "empty-slot-";
 
 const ConfigurableDashboard: React.FC = () => {
   const dashboard = useDashboardStore((s) => s.dashboard);
   const setDashboard = useDashboardStore((s) => s.setDashboard);
-  const updateLayout = useDashboardStore((s) => s.updateLayout);
+  const removeDevice = useDashboardStore((s) => s.removeDevice);
+  const reorderDevices = useDashboardStore((s) => s.reorderDevices);
   const layoutChangable = useUiStore((s) => s.layoutChangable);
   const setLayoutChangable = useUiStore((s) => s.setLayoutChangable);
-  const login = useUiStore((s) => s.login);
 
   // Adapter so child components that expect React.Dispatch<SetStateAction<...>>
   // still work — they only call setDashboard(value), never the functional form.
@@ -50,52 +37,33 @@ const ConfigurableDashboard: React.FC = () => {
     [dashboard, setDashboard]
   );
 
-  const {
-    isOpen: isOpenAddDevicesToDashboard,
-    onOpen: onOpenAddDevicesToDashboard,
-    onClose: onCloseAddDevicesToDashboard,
-  } = useDisclosure();
+  const { isOpen: isOpenAddDevice, onOpen: onOpenAddDevice, onClose: onCloseAddDevice } = useDisclosure();
+  const { isOpen: isOpenAddWidget, onOpen: onOpenAddWidget, onClose: onCloseAddWidget } = useDisclosure();
+  const [addWidgetDeviceId, setAddWidgetDeviceId] = useState<string | null>(null);
+  const [containerRef, containerSize] = useElementSize<HTMLDivElement>();
 
-  const [currentLayout, setCurrentLayout] = useState(null);
-  const [refresh, setRefresh] = useState(false);
+  const devices = dashboard.devices.slice(0, MAX_DEVICES);
 
-  // Measures the grid's actual container instead of assuming every
-  // shop-floor touchscreen is 1920px wide (screen size varies per machine).
-  const gridContainerRef = useRef<HTMLDivElement>(null);
-  const [gridWidth, setGridWidth] = useState(() => window.innerWidth);
+  // Device strips live on a single-row, MAX_DEVICES-column grid so the same
+  // drag machinery that reorders widgets also reorders devices — dragging a
+  // strip by its header handle displaces whichever strip is in the way.
+  const deviceLayout: Layout[] = devices.map((device, i) => ({ i: device.id, x: i, y: 0, w: 1, h: 1 }));
+  const usedSlots = new Set(deviceLayout.map((l) => l.x));
+  const emptySlotLayout: Layout[] = layoutChangable
+    ? Array.from({ length: MAX_DEVICES })
+        .map((_, i) => i)
+        .filter((i) => !usedSlots.has(i))
+        .map((i) => ({ i: `${EMPTY_SLOT_PREFIX}${i}`, x: i, y: 0, w: 1, h: 1, static: true }))
+    : [];
+  const fullLayout = [...deviceLayout, ...emptySlotLayout];
 
-  useEffect(() => {
-    const el = gridContainerRef.current;
-    if (!el) return;
-
-    const observer = new ResizeObserver((entries) => {
-      const width = entries[0]?.contentRect.width;
-      if (width) setGridWidth(width);
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  const saveLayout = async () => {
-    if (!currentLayout) return;
-    const newLayout = (currentLayout as any[]).map((item: any) => ({
-      i: item.i,
-      x: item.x,
-      y: item.y,
-      w: item.w,
-      h: item.h,
-    }));
-    try {
-      await updateLayout(newLayout);
-      setLayoutChangable(false);
-    } catch (e) {
-      console.error(e);
-    }
+  const handleDeviceReorder = (settled: Layout[]) => {
+    const newOrder = settled
+      .filter((l) => !l.i.startsWith(EMPTY_SLOT_PREFIX))
+      .sort((a, b) => a.x - b.x)
+      .map((l) => l.i);
+    reorderDevices(newOrder);
   };
-
-  if (refresh) {
-    return <Text>Loading</Text>;
-  }
 
   return (
     <Box
@@ -107,84 +75,85 @@ const ConfigurableDashboard: React.FC = () => {
       display="flex"
       flexDirection="column"
     >
-      <Box
-        flex="1"
-        minHeight={0}
-        pt={2}
-        pb={layoutChangable ? "88px" : 0}
-        width="100%"
-        overflowY="auto"
-        ref={gridContainerRef}
-      >
-        {dashboard.layout.length > 0 ? (
-          <GridLayout
-            className="layout"
-            layout={dashboard.layout}
-            cols={5}
-            width={gridWidth}
-            maxRows={18}
-            rowHeight={72}
-            compactType="horizontal"
-            margin={[24, 24]}
-            containerPadding={[16, 16]}
-            draggableCancel={".notdraggable"}
-            isResizable={layoutChangable}
-            onLayoutChange={(e) => setCurrentLayout(e)}
-            isDraggable={layoutChangable}
-          >
-            {dashboard.devices.map((e) => {
-              if (e.display) {
-                return (
-                  <div
-                    key={e.id}
-                    data-grid={{
-                      ...dashboard.layout.filter((i) => i.i === e.id)[0],
-                      minW: 1,
-                      minH: getMinCardHeight(e.widgets),
-                    }}
-                  >
-                    <WidgetErrorBoundary widgetName={e.name ?? e.key}>
-                      <DeviceWidget
-                        deviceBlock={e}
-                        setDashboard={setDashboardCompat as any}
-                        dashboard={dashboard as any}
-                        layoutChangable={layoutChangable}
-                        login={login}
-                        setRefresh={setRefresh}
-                      />
-                    </WidgetErrorBoundary>
-                  </div>
-                );
-              } else {
-                return null;
-              }
-            })}
-          </GridLayout>
+      <Box flex="1" minHeight={0} width="100%" p={2} ref={containerRef}>
+        {devices.length === 0 && !layoutChangable ? (
+          <Flex height="100%" alignItems="center" justifyContent="center">
+            <Text color="whiteAlpha.600">No devices on the dashboard yet</Text>
+          </Flex>
         ) : (
-          <Box>
-            <Text>No widgets found to display</Text>
-          </Box>
+          containerSize.width > 0 &&
+          containerSize.height > 0 && (
+            <GridLayout
+              className="layout"
+              layout={fullLayout}
+              cols={MAX_DEVICES}
+              maxRows={1}
+              width={containerSize.width}
+              rowHeight={containerSize.height}
+              margin={[COLUMN_GAP, 0]}
+              containerPadding={[0, 0]}
+              compactType="horizontal"
+              preventCollision={false}
+              isBounded
+              isResizable={false}
+              isDraggable={layoutChangable}
+              draggableHandle=".device-drag-handle"
+              onDragStop={handleDeviceReorder}
+            >
+              {devices.map((device) => (
+                <div key={device.id}>
+                  <DeviceColumn
+                    device={device}
+                    colorToken={deviceColor(device.id)}
+                    layoutChangable={layoutChangable}
+                    onAddWidget={() => {
+                      setAddWidgetDeviceId(device.id);
+                      onOpenAddWidget();
+                    }}
+                    onRemoveDevice={() => removeDevice(device.id)}
+                  />
+                </div>
+              ))}
+
+              {/* In edit mode the unused strips become add-device targets. */}
+              {emptySlotLayout.map((slot) => (
+                <div key={slot.i}>
+                  <Flex
+                    as="button"
+                    onClick={onOpenAddDevice}
+                    width="100%"
+                    height="100%"
+                    alignItems="center"
+                    justifyContent="center"
+                    flexDir="column"
+                    gap={2}
+                    border="2px dashed"
+                    borderColor="whiteAlpha.300"
+                    borderRadius="12px"
+                    color="whiteAlpha.500"
+                    _hover={{ borderColor: "whiteAlpha.500", color: "whiteAlpha.700" }}
+                  >
+                    <Icon as={MdAddToQueue} boxSize="40px" />
+                    <Text fontSize="14px" fontWeight="medium">
+                      Add device
+                    </Text>
+                  </Flex>
+                </div>
+              ))}
+            </GridLayout>
+          )
         )}
       </Box>
 
       {layoutChangable ? (
         <Flex position={"absolute"} bottom={5} right={5}>
-          <Button
-            size="lg"
-            colorScheme={"blackAlpha"}
-            onClick={() => window.location.reload()}
-            mr={2}
-          >
-            Back
-          </Button>
-
-          <Button
-            size="lg"
+          <IconButton
+            icon={<MdCheck />}
+            aria-label="Done editing"
             colorScheme={"twitter"}
-            onClick={() => saveLayout()}
-          >
-            Save layout
-          </Button>
+            size="lg"
+            onClick={() => setLayoutChangable(false)}
+          />
         </Flex>
       ) : (
         <QuickToolBar>
@@ -195,16 +164,23 @@ const ConfigurableDashboard: React.FC = () => {
             height={"80px"}
             width="80px"
             fontSize={"50px"}
-            onClick={onOpenAddDevicesToDashboard}
+            onClick={onOpenAddDevice}
           />
         </QuickToolBar>
       )}
 
-      <AddDevicesToDashboardModal
-        isOpen={isOpenAddDevicesToDashboard}
-        onClose={onCloseAddDevicesToDashboard}
+      <AddDeviceModal
+        isOpen={isOpenAddDevice}
+        onClose={onCloseAddDevice}
         dashboard={dashboard as any}
         setDashboard={setDashboardCompat as any}
+      />
+
+      <WidgetModal
+        isOpen={isOpenAddWidget}
+        onClose={onCloseAddWidget}
+        deviceId={addWidgetDeviceId}
+        deviceName={dashboard.devices.find((d) => d.id === addWidgetDeviceId)?.name}
       />
     </Box>
   );

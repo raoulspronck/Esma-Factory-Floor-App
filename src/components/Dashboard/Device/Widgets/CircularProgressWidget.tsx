@@ -7,6 +7,7 @@ import {
 } from "@chakra-ui/react";
 import React from "react";
 import { useDeviceValue } from "../../../../hooks/useDeviceValue";
+import { useElementSize } from "../../../../hooks/useElementSize";
 
 interface CircularProgressWidgetProps {
   deviceId: string;
@@ -25,14 +26,19 @@ const CircularProgressWidget: React.FC<CircularProgressWidgetProps> = ({
   const value = parseInt(rawValue ?? "0") || 0;
   const maxValue = parseInt(rawMaxValue ?? "0") || 0;
 
+  const [containerRef, { width, height }] = useElementSize<HTMLDivElement>();
+  // Fills whatever the grid cell gives it (1x1 up to a full 2x2+), floored so
+  // it never collapses to nothing before the first measurement lands.
+  const diameter = Math.max(Math.min(width, height) - 24, 64);
+
   return (
-    <Flex justifyContent={"center"} pb={6} pt={6}>
+    <Flex ref={containerRef} justifyContent={"center"} alignItems="center" width="100%" height="100%">
       {loading ? (
         <Text fontSize="30px">Loading...</Text>
       ) : (
         <CircularProgress
           value={(value / maxValue) * 100}
-          size="208px"
+          size={`${diameter}px`}
           thickness="10px"
           color={"brand.400"}
           trackColor="whiteAlpha.200"
@@ -41,11 +47,11 @@ const CircularProgressWidget: React.FC<CircularProgressWidgetProps> = ({
           <CircularProgressLabel color="white">
             <Flex justifyContent={"center"}>
               <Box width={"fit-content"}>
-                <Text fontSize={"56px"} fontWeight="extrabold" lineHeight="1">
+                <Text fontSize={`${Math.round(diameter * 0.27)}px`} fontWeight="extrabold" lineHeight="1">
                   {value}
                 </Text>
                 <Text
-                  fontSize={"28px"}
+                  fontSize={`${Math.round(diameter * 0.13)}px`}
                   fontWeight="semibold"
                   color="whiteAlpha.700"
                   pt={1}

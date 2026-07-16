@@ -51,8 +51,12 @@ export async function getBasicSettings(): Promise<BasicSettings> {
   return JSON.parse(raw);
 }
 
-export async function saveBasicSettings(gesture: string, dashboard: string): Promise<void> {
-  await invoke("save_basic_settings", { gesture, dashboard });
+export async function saveBasicSettings(
+  gesture: string,
+  dashboard: string,
+  rows: number
+): Promise<void> {
+  await invoke("save_basic_settings", { gesture, dashboard, rows });
 }
 
 export async function getAlerts(): Promise<Alert[]> {

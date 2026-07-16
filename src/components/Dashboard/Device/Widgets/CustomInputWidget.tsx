@@ -1,24 +1,12 @@
-import {
-  Box,
-  Button,
-  Flex,
-  Input,
-  Spacer,
-  Stat,
-  StatHelpText,
-  StatLabel,
-  StatNumber,
-  Switch,
-} from "@chakra-ui/react";
+import { Button, Flex, Input, Text } from "@chakra-ui/react";
 import { invoke } from "@tauri-apps/api";
 import React, { useState } from "react";
 import { formatDate } from "../../../../utils/formatDate";
-import { formatNumberValue } from "../../../../utils/formatValue";
 import { useDeviceValue, useDeviceValueTimestamp } from "../../../../hooks/useDeviceValue";
+import { useElementSize } from "../../../../hooks/useElementSize";
 import {
-  STAT_DIVIDER,
+  statTypography,
   STAT_LABEL_COLOR,
-  STAT_ROW_MIN_H,
   STAT_TIMESTAMP_COLOR,
 } from "./widgetTokens";
 
@@ -30,23 +18,6 @@ interface CustomInputWidgetProps {
   small?: number;
   name?: string;
 }
-
-const textSizeCalculate = (text: string) => {
-  if (text !== undefined) {
-    if (text.length < 11) {
-      return 26;
-    } else if (text.length < 13) {
-      return 24;
-    } else if (text.length < 20) {
-      return 21;
-    } else if (text.length < 26) {
-      return 19;
-    } else if (text.length < 34) {
-      return 17;
-    }
-    return 15;
-  }
-};
 
 const CustomInputWidget: React.FC<CustomInputWidgetProps> = ({
   deviceKey,
@@ -75,68 +46,63 @@ const CustomInputWidget: React.FC<CustomInputWidgetProps> = ({
       .catch(() => {});
   };
 
+  const [rootRef, { width, height }] = useElementSize<HTMLDivElement>();
+  const t = statTypography(width, height);
+  const controlSize = height >= 150 ? "lg" : height >= 90 ? "md" : "sm";
+
   return (
     <Flex
-      width={"100%"}
-      pr={6}
-      pl={6}
-      maxH={STAT_ROW_MIN_H}
-      minH={STAT_ROW_MIN_H}
-      flexDir={"column"}
-      justifyContent={"center"}
-      {...STAT_DIVIDER}
+      ref={rootRef}
+      flexDir="column"
+      width="100%"
+      height="100%"
+      px={3}
+      py={1.5}
+      overflow="hidden"
     >
-      <Stat>
-        <Flex alignItems={"center"}>
-          <StatLabel fontSize={"17px"} fontWeight="medium" color={STAT_LABEL_COLOR} noOfLines={1} flexShrink={1} minW={0}>
-            {dataPoints[0]}
-          </StatLabel>
+      {t.showLabel && (
+        <Text
+          fontSize={`${t.labelSize}px`}
+          fontWeight="medium"
+          color={STAT_LABEL_COLOR}
+          noOfLines={1}
+          flexShrink={0}
+        >
+          {dataPoints[0]}
+        </Text>
+      )}
 
-          <Box ml="auto" textAlign={"right"} maxWidth={"220px"} flexShrink={0}>
-            {loading ? (
-              <StatNumber fontSize="22px" color={STAT_LABEL_COLOR}>
-                Loading...
-              </StatNumber>
-            ) : value.value !== undefined && value.value !== "" ? (
-              <Flex alignItems={"center"}>
-                <Input
-                  size="lg"
-                  placeholder={value.value}
-                  fontSize={`${textSizeCalculate(value.value)}px`}
-                  fontWeight="bold"
-                  textAlign="right"
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                />
-                <Button size="lg" ml={2} colorScheme="brand" onClick={() => sendMessage()}>
-                  Send
-                </Button>
-              </Flex>
-            ) : (
-              <Flex alignItems={"center"}>
-                <Input
-                  size="lg"
-                  textAlign="right"
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                />
-                <Button size="lg" ml={2} colorScheme="brand" onClick={() => sendMessage()}>
-                  Send
-                </Button>
-              </Flex>
-            )}
-          </Box>
-        </Flex>
-        <Flex mt={1}>
-          <StatHelpText fontSize={"11px"} color={STAT_TIMESTAMP_COLOR} ml="auto" mb={0}>
-            {loading
-              ? ""
-              : value.value !== "" && value.value !== undefined
-              ? formatDate(value.time)
-              : ""}
-          </StatHelpText>
-        </Flex>
-      </Stat>
+      <Flex flex="1" minH={0} alignItems="center" gap={2} overflow="hidden" className="notdraggable">
+        {loading ? (
+          <Text color={STAT_LABEL_COLOR}>Loading...</Text>
+        ) : (
+          <>
+            <Input
+              size={controlSize}
+              placeholder={value.value !== "" ? value.value : undefined}
+              fontWeight="bold"
+              textAlign="right"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+            />
+            <Button size={controlSize} colorScheme="brand" onClick={() => sendMessage()} flexShrink={0}>
+              Send
+            </Button>
+          </>
+        )}
+      </Flex>
+
+      {t.showTs && (
+        <Text
+          fontSize={`${t.tsSize}px`}
+          color={STAT_TIMESTAMP_COLOR}
+          textAlign="right"
+          noOfLines={1}
+          flexShrink={0}
+        >
+          {loading ? "" : value.value !== "" ? formatDate(value.time) : ""}
+        </Text>
+      )}
     </Flex>
   );
 };

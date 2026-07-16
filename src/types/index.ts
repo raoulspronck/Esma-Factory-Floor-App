@@ -1,30 +1,28 @@
 // Central type definitions — mirror the Rust model structs.
 
+// Format v3: each device owns a 2-column × 8-row strip on the dashboard
+// (array order = strip order, max 5 devices). Widget x/y/w/h are LOCAL to
+// the device's strip (x 0..1, w 1..2, y 0..7, h 1..8). `version` marks the
+// format so the Rust side can migrate older files.
 export interface Dashboard {
-  layout: GridLayout[];
+  version: number;
   devices: Device[];
-}
-
-export interface GridLayout {
-  i: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
 }
 
 export interface Device {
   id: string;
   name: string;
   key: string;
-  display: boolean;
   widgets: Widget[];
 }
 
 export interface Widget {
   id: string;
   name: string;
-  height: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
   datapoints: string[];
 }
 
@@ -55,6 +53,9 @@ export interface ApiSettings {
 export interface BasicSettings {
   gesture_control: string;
   automatic_load_dashboard: string;
+  // Rows per device strip on the dashboard grid; optional because older
+  // basic.settings.json files don't have it yet.
+  dashboard_rows?: number;
 }
 
 export interface Alert {

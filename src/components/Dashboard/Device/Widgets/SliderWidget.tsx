@@ -6,16 +6,19 @@ import {
   SliderMark,
   SliderThumb,
   SliderTrack,
-  Stat,
-  StatHelpText,
-  StatLabel,
   Text,
 } from "@chakra-ui/react";
 import { invoke } from "@tauri-apps/api";
 import React, { useEffect, useState } from "react";
 import { formatDate } from "../../../../utils/formatDate";
 import { useDeviceValue, useDeviceValueTimestamp } from "../../../../hooks/useDeviceValue";
-import { STAT_DIVIDER, STAT_LABEL_COLOR, STAT_ROW_MIN_H, STAT_TIMESTAMP_COLOR } from "./widgetTokens";
+import { useElementSize } from "../../../../hooks/useElementSize";
+import {
+  scaleFont,
+  statTypography,
+  STAT_LABEL_COLOR,
+  STAT_TIMESTAMP_COLOR,
+} from "./widgetTokens";
 
 interface SliderWidgetProps {
   deviceId: string;
@@ -24,21 +27,6 @@ interface SliderWidgetProps {
   types: string[];
   small?: number;
 }
-
-const textSizeCalculate = (text: string) => {
-  if (text.length < 11) {
-    return 30;
-  } else if (text.length < 13) {
-    return 27;
-  } else if (text.length < 20) {
-    return 25;
-  } else if (text.length < 26) {
-    return 23;
-  } else if (text.length < 34) {
-    return 20;
-  }
-  return 15;
-};
 
 const SliderWidget: React.FC<SliderWidgetProps> = ({
   deviceKey,
@@ -66,11 +54,17 @@ const SliderWidget: React.FC<SliderWidgetProps> = ({
     }
   }, [rawValue]);
 
+  const [rootRef, { width, height }] = useElementSize<HTMLDivElement>();
+  const t = statTypography(width, height);
+  const markSize = scaleFont(height, 0.09, 9, 12);
+  const currentSize = scaleFont(height, 0.14, 12, 18);
+  const showMarks = height >= 96;
+
   const labelStyles = {
     mt: "2",
     ml: "-2.5",
     color: STAT_TIMESTAMP_COLOR,
-    fontSize: ["10px", "12px", "14px"],
+    fontSize: `${markSize}px`,
   };
 
   const send = (val: number) => {
@@ -84,60 +78,84 @@ const SliderWidget: React.FC<SliderWidgetProps> = ({
   };
 
   return (
-    <Box width={"100%"} pr={6} pl={6} maxH={STAT_ROW_MIN_H} minH={STAT_ROW_MIN_H} {...STAT_DIVIDER}>
-      <Stat height="100%" display="flex" flexDir="column" justifyContent="center">
-        <Flex alignItems={"center"}>
-          <StatLabel fontSize={"17px"} fontWeight="medium" color={STAT_LABEL_COLOR} width={"fit-content"} noOfLines={1} flexShrink={0}>
-            {dataPoints[0]}
-          </StatLabel>
+    <Flex
+      ref={rootRef}
+      flexDir="column"
+      width="100%"
+      height="100%"
+      px={4}
+      py={1.5}
+      overflow="hidden"
+    >
+      {t.showLabel && (
+        <Text
+          fontSize={`${t.labelSize}px`}
+          fontWeight="medium"
+          color={STAT_LABEL_COLOR}
+          noOfLines={1}
+          flexShrink={0}
+        >
+          {dataPoints[0]}
+        </Text>
+      )}
 
-          <Box width={"100%"} ml={5} mr={0} textAlign={"right"}>
-            {loading ? (
-              <Text color={STAT_LABEL_COLOR}>Loading...</Text>
-            ) : (
-              <Slider
-                aria-label="slider-ex-6"
-                onChangeEnd={(val) => send(val)}
-                width={"100%"}
-                mt={4}
-                onChange={(val) => setSlider(val)}
+      <Flex flex="1" minH={0} alignItems="center" overflow="hidden" className="notdraggable">
+        {loading ? (
+          <Text color={STAT_LABEL_COLOR}>Loading...</Text>
+        ) : (
+          <Box width="100%" px={2}>
+            <Slider
+              aria-label="datapoint-slider"
+              onChangeEnd={(val) => send(val)}
+              width={"100%"}
+              onChange={(val) => setSlider(val)}
+              value={slider}
+            >
+              {showMarks && (
+                <>
+                  <SliderMark value={25} {...labelStyles}>
+                    25%
+                  </SliderMark>
+                  <SliderMark value={50} {...labelStyles}>
+                    50%
+                  </SliderMark>
+                  <SliderMark value={75} {...labelStyles}>
+                    75%
+                  </SliderMark>
+                </>
+              )}
+              <SliderMark
                 value={slider}
+                textAlign="center"
+                color={"white"}
+                fontWeight="bold"
+                mt={`-${currentSize + 18}px`}
+                ml={`-${currentSize}px`}
+                fontSize={`${currentSize}px`}
               >
-                <SliderMark value={25} {...labelStyles}>
-                  25%
-                </SliderMark>
-                <SliderMark value={50} {...labelStyles}>
-                  50%
-                </SliderMark>
-                <SliderMark value={75} {...labelStyles}>
-                  75%
-                </SliderMark>
-                <SliderMark
-                  value={slider}
-                  textAlign="center"
-                  color={"white"}
-                  fontWeight="bold"
-                  mt={["-6", "-7", "-8"]}
-                  ml={["-4", "-5", "-6"]}
-                  fontSize={["14px", "16px", "18px"]}
-                >
-                  {slider}%
-                </SliderMark>
-                <SliderTrack height="8px" borderRadius="full" bg="whiteAlpha.200">
-                  <SliderFilledTrack bg="brand.400" />
-                </SliderTrack>
-                <SliderThumb boxSize="26px" />
-              </Slider>
-            )}
+                {slider}%
+              </SliderMark>
+              <SliderTrack height="8px" borderRadius="full" bg="whiteAlpha.200">
+                <SliderFilledTrack bg="brand.400" />
+              </SliderTrack>
+              <SliderThumb boxSize={height >= 120 ? "26px" : "18px"} />
+            </Slider>
           </Box>
-        </Flex>
-        <Flex mt={3}>
-          <StatHelpText fontSize={"11px"} color={STAT_TIMESTAMP_COLOR} ml="auto" mb={0}>
-            {loading ? "" : value.value !== "" ? formatDate(value.time) : ""}
-          </StatHelpText>
-        </Flex>
-      </Stat>
-    </Box>
+        )}
+      </Flex>
+
+      {t.showTs && (
+        <Text
+          fontSize={`${t.tsSize}px`}
+          color={STAT_TIMESTAMP_COLOR}
+          textAlign="right"
+          noOfLines={1}
+          flexShrink={0}
+        >
+          {loading ? "" : value.value !== "" ? formatDate(value.time) : ""}
+        </Text>
+      )}
+    </Flex>
   );
 };
 

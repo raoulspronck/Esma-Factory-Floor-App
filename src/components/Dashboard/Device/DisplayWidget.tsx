@@ -11,42 +11,17 @@ import SwitchWidget from "./Widgets/SwitchWidget";
 import SliderWidget from "./Widgets/SliderWidget";
 import CustomInputWidget from "./Widgets/CustomInputWidget";
 import { STAT_DIVIDER_COLOR } from "./Widgets/widgetTokens";
+import { useDashboardStore } from "../../../stores/dashboardStore";
 
 interface DisplayWidgetProps {
   deviceKey: string;
   deviceId: string;
   layoutChangable: boolean;
-  setDashboard: React.Dispatch<
-    React.SetStateAction<{
-      layout: {
-        i: string;
-        x: number;
-        y: number;
-        w: number;
-        h: number;
-        static: boolean;
-      }[];
-      devices: any[];
-    }>
-  >;
-  dashboard: {
-    layout: {
-      i: string;
-      x: number;
-      y: number;
-      w: number;
-      h: number;
-      static: boolean;
-    }[];
-    devices: any[];
-  };
   widget: {
     id: string;
     name: string;
-    height: number;
     datapoints: string[];
   };
-  setRefresh: React.Dispatch<React.SetStateAction<boolean>>;
   dataPoints: any[];
   small?: number;
 }
@@ -56,55 +31,11 @@ const DisplayWidget: React.FC<DisplayWidgetProps> = ({
   widget,
   deviceId,
   layoutChangable,
-  dashboard,
-  setDashboard,
-  setRefresh,
   dataPoints,
   small,
 }) => {
-  const deleteWidget = async () => {
-    let widgetHeight = 1;
-
-    if (
-      widget.name === "Circular progress" ||
-      widget.name === "Circular progress with variable color"
-    ) {
-      widgetHeight = 3;
-    }
-
-    const newLayout = dashboard.layout.map((e) => {
-      if (e.i === deviceId) {
-        let newLay = e;
-        newLay.h = e.h - widgetHeight;
-        return newLay;
-      }
-      return e;
-    });
-
-    const newDevices = dashboard.devices.map((e) => {
-      if (e.id === deviceId) {
-        return {
-          id: e.id,
-          name: e.name,
-          key: e.key,
-          display: true,
-          widgets: e.widgets.filter((i: any) => i.id !== widget.id),
-        };
-      }
-
-      return e;
-    });
-
-    setDashboard({
-      layout: newLayout,
-      devices: newDevices,
-    });
-
-    setRefresh(true);
-    setTimeout(() => {
-      setRefresh(false);
-    }, 10);
-  };
+  const removeWidget = useDashboardStore((s) => s.removeWidget);
+  const deleteWidget = () => removeWidget(deviceId, widget.id);
 
   const [type, setType] = useState([]);
 
@@ -125,7 +56,7 @@ const DisplayWidget: React.FC<DisplayWidgetProps> = ({
   switch (widget.name.split("/")[0]) {
     case "Two Default":
       return (
-        <Flex alignItems={"stretch"}>
+        <Flex alignItems={"stretch"} height="100%">
           <Box flex="1" minW={0}>
             {widget.name.split("/")[1] === "Time prediction" ? (
               <TimePredictionWidget
@@ -183,8 +114,8 @@ const DisplayWidget: React.FC<DisplayWidgetProps> = ({
 
     case "Circular progress with variable color":
       return (
-        <Flex alignItems={"center"}>
-          <Box width={"100%"}>
+        <Flex alignItems={"center"} height="100%">
+          <Box width={"100%"} height="100%">
             <CircularProgressWidgetWithVariableColor
               deviceId={deviceId}
               dataPoints={widget.datapoints}
@@ -207,8 +138,8 @@ const DisplayWidget: React.FC<DisplayWidgetProps> = ({
 
     case "Circular progress":
       return (
-        <Flex alignItems={"center"}>
-          <Box width={"100%"}>
+        <Flex alignItems={"center"} height="100%">
+          <Box width={"100%"} height="100%">
             <CircularProgressWidget
               deviceId={deviceId}
               dataPoints={widget.datapoints}
@@ -231,8 +162,8 @@ const DisplayWidget: React.FC<DisplayWidgetProps> = ({
 
     case "Switch":
       return (
-        <Flex alignItems={"center"}>
-          <Box width={"100%"}>
+        <Flex alignItems={"center"} height="100%">
+          <Box width={"100%"} height="100%">
             <SwitchWidget
               deviceId={deviceId}
               dataPoints={widget.datapoints}
@@ -256,8 +187,8 @@ const DisplayWidget: React.FC<DisplayWidgetProps> = ({
 
     case "Custom input":
       return (
-        <Flex alignItems={"center"}>
-          <Box width={"100%"}>
+        <Flex alignItems={"center"} height="100%">
+          <Box width={"100%"} height="100%">
             <CustomInputWidget
               deviceId={deviceId}
               dataPoints={widget.datapoints}
@@ -281,8 +212,8 @@ const DisplayWidget: React.FC<DisplayWidgetProps> = ({
 
     case "Slider":
       return (
-        <Flex alignItems={"center"}>
-          <Box width={"100%"}>
+        <Flex alignItems={"center"} height="100%">
+          <Box width={"100%"} height="100%">
             <SliderWidget
               deviceId={deviceId}
               dataPoints={widget.datapoints}
@@ -306,8 +237,8 @@ const DisplayWidget: React.FC<DisplayWidgetProps> = ({
 
     case "Timer":
       return (
-        <Flex alignItems={"center"}>
-          <Box width={"100%"}>
+        <Flex alignItems={"center"} height="100%">
+          <Box width={"100%"} height="100%">
             <TimerWidget
               deviceId={deviceId}
               dataPoints={widget.datapoints}
@@ -330,8 +261,8 @@ const DisplayWidget: React.FC<DisplayWidgetProps> = ({
 
     case "Default progress up":
       return (
-        <Flex alignItems={"center"}>
-          <Box width={"100%"}>
+        <Flex alignItems={"center"} height="100%">
+          <Box width={"100%"} height="100%">
             <ValueWithProgressWidget
               up={true}
               dataPoints={widget.datapoints}
@@ -356,8 +287,8 @@ const DisplayWidget: React.FC<DisplayWidgetProps> = ({
 
     case "Default progress down":
       return (
-        <Flex alignItems={"center"}>
-          <Box width={"100%"}>
+        <Flex alignItems={"center"} height="100%">
+          <Box width={"100%"} height="100%">
             <ValueWithProgressWidget
               up={false}
               dataPoints={widget.datapoints}
@@ -382,8 +313,8 @@ const DisplayWidget: React.FC<DisplayWidgetProps> = ({
 
     case "Time prediction":
       return (
-        <Flex alignItems={"center"}>
-          <Box width={"100%"}>
+        <Flex alignItems={"center"} height="100%">
+          <Box width={"100%"} height="100%">
             <TimePredictionWidget
               dataPoints={widget.datapoints}
               deviceKey={deviceKey}
@@ -407,8 +338,8 @@ const DisplayWidget: React.FC<DisplayWidgetProps> = ({
 
     default:
       return (
-        <Flex alignItems={"center"}>
-          <Box width={"100%"}>
+        <Flex alignItems={"center"} height="100%">
+          <Box width={"100%"} height="100%">
             <DefaultWidget
               dataPoints={widget.datapoints}
               deviceKey={deviceKey}

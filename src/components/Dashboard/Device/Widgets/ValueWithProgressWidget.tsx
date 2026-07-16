@@ -1,22 +1,16 @@
 import { MinusIcon } from "@chakra-ui/icons";
-import {
-  Box,
-  Flex,
-  Icon,
-  Stat,
-  StatArrow,
-  StatHelpText,
-  StatLabel,
-  StatNumber,
-} from "@chakra-ui/react";
+import { Flex, Icon, Text } from "@chakra-ui/react";
+import { TriangleDownIcon, TriangleUpIcon } from "@chakra-ui/icons";
 import React, { useEffect, useRef, useState } from "react";
 import { formatDate } from "../../../../utils/formatDate";
 import { formatNumberValue } from "../../../../utils/formatValue";
 import { useDeviceValue, useDeviceValueTimestamp } from "../../../../hooks/useDeviceValue";
+import { useElementSize } from "../../../../hooks/useElementSize";
 import {
-  STAT_DIVIDER,
+  fitFontSize,
+  scaleFont,
+  statTypography,
   STAT_LABEL_COLOR,
-  STAT_ROW_MIN_H,
   STAT_TIMESTAMP_COLOR,
   STAT_VALUE_COLOR,
 } from "./widgetTokens";
@@ -28,23 +22,6 @@ interface ValueWithProgressWidgetProps {
   dataPoints: string[];
   types: string[];
 }
-
-// Sized so a value fits the ~180px value column (after the delta arrow) on
-// one line; noOfLines={1} ellipsizes anything longer instead of wrapping.
-const textSizeCalculate = (text: string) => {
-  if (text.length < 6) {
-    return 40;
-  } else if (text.length < 11) {
-    return 30;
-  } else if (text.length < 13) {
-    return 25;
-  } else if (text.length < 22) {
-    return 18;
-  } else if (text.length < 34) {
-    return 14;
-  }
-  return 12;
-};
 
 const ValueWithProgressWidget: React.FC<ValueWithProgressWidgetProps> = ({
   up,
@@ -77,72 +54,70 @@ const ValueWithProgressWidget: React.FC<ValueWithProgressWidgetProps> = ({
     prevValue.current = numeric;
   }, [rawValue]);
 
-  return (
-    <Box width={"100%"} pr={6} pl={6} maxH={STAT_ROW_MIN_H} minH={STAT_ROW_MIN_H} {...STAT_DIVIDER}>
-      <Stat height="100%" display="flex" flexDir="column" justifyContent="center">
-        <Flex alignItems={"center"}>
-          <StatLabel fontSize={"17px"} fontWeight="medium" color={STAT_LABEL_COLOR} noOfLines={1} flexShrink={1} minW={0}>
-            {dataPoints[0]}
-          </StatLabel>
+  const [rootRef, { width, height }] = useElementSize<HTMLDivElement>();
+  const t = statTypography(width, height);
+  const shown = loading ? "Loading..." : value.value !== "" ? value.value : "No data";
+  const valueSize = fitFontSize(shown, width * 0.6, t.valueArea, { min: 12, max: 60 });
+  const deltaSize = scaleFont(height, 0.11, 10, 15);
 
-          <Box ml="auto" textAlign={"right"} flexShrink={0}>
-            <Flex alignItems={"baseline"}>
-              <Box height={"fit-content"}>
-                {difference === 0 ? (
-                  <StatHelpText mr={2} fontSize="16px" color={STAT_TIMESTAMP_COLOR} mb={0}>
-                    <Icon as={MinusIcon} boxSize={5} color="whiteAlpha.500" />
-                    {difference}%
-                  </StatHelpText>
-                ) : difference > 0 ? (
-                  <StatHelpText mr={2} fontSize="15px" fontWeight="semibold" mb={0}>
-                    <StatArrow
-                      type={"increase"}
-                      color={up ? "green.400" : "red.400"}
-                      boxSize={5}
-                    />
-                    {difference}%
-                  </StatHelpText>
-                ) : (
-                  <StatHelpText mr={2} fontSize="15px" fontWeight="semibold" mb={0}>
-                    <StatArrow
-                      type={"decrease"}
-                      color={up ? "red.400" : "green.400"}
-                      boxSize={5}
-                    />
-                    {difference}%
-                  </StatHelpText>
-                )}
-              </Box>
-              <Box maxWidth={"180px"}>
-                {loading ? (
-                  <StatNumber fontSize="32px" color={STAT_VALUE_COLOR}>
-                    Loading...
-                  </StatNumber>
-                ) : value.value !== "" ? (
-                  <StatNumber
-                    fontSize={`${textSizeCalculate(value.value)}px`}
-                    fontWeight="bold"
-                    color={STAT_VALUE_COLOR}
-                    noOfLines={1}
-                  >
-                    {value.value}
-                  </StatNumber>
-                ) : (
-                  <StatNumber fontSize="32px" color={STAT_VALUE_COLOR}>
-                    No data
-                  </StatNumber>
-                )}
-              </Box>
-            </Flex>
-          </Box>
+  const deltaColor =
+    difference === 0 ? "whiteAlpha.500" : (difference > 0) === up ? "green.400" : "red.400";
+
+  return (
+    <Flex
+      ref={rootRef}
+      flexDir="column"
+      width="100%"
+      height="100%"
+      px={3}
+      py={1.5}
+      overflow="hidden"
+    >
+      {t.showLabel && (
+        <Text
+          fontSize={`${t.labelSize}px`}
+          fontWeight="medium"
+          color={STAT_LABEL_COLOR}
+          noOfLines={1}
+          flexShrink={0}
+        >
+          {dataPoints[0]}
+        </Text>
+      )}
+
+      <Flex flex="1" minH={0} alignItems="center" justifyContent="center" gap={2} overflow="hidden">
+        <Flex alignItems="center" flexShrink={0} color={deltaColor} fontWeight="semibold" fontSize={`${deltaSize}px`}>
+          <Icon
+            as={difference === 0 ? MinusIcon : difference > 0 ? TriangleUpIcon : TriangleDownIcon}
+            boxSize={`${deltaSize}px`}
+            mr={1}
+          />
+          {difference}%
         </Flex>
-        <Flex>
-          <StatHelpText fontSize={"11px"} color={STAT_TIMESTAMP_COLOR} ml="auto" mb={0}>
-            {loading ? "" : value.value !== "" ? formatDate(value.time) : ""}
-          </StatHelpText>
-        </Flex>
-      </Stat>
-    </Box>
+        <Text
+          fontSize={`${valueSize}px`}
+          fontWeight="bold"
+          color={STAT_VALUE_COLOR}
+          noOfLines={1}
+          lineHeight="1.1"
+          minW={0}
+        >
+          {shown}
+        </Text>
+      </Flex>
+
+      {t.showTs && (
+        <Text
+          fontSize={`${t.tsSize}px`}
+          color={STAT_TIMESTAMP_COLOR}
+          textAlign="right"
+          noOfLines={1}
+          flexShrink={0}
+        >
+          {loading ? "" : value.value !== "" ? formatDate(value.time) : ""}
+        </Text>
+      )}
+    </Flex>
   );
 };
 

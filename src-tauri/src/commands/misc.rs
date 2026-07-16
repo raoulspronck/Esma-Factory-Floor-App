@@ -6,6 +6,7 @@ use tauri::{Manager, State};
 
 use crate::error::AppError;
 use crate::models::settings::{Debiteur, LoginData};
+use crate::services::http::read_api_response;
 use crate::state::AppState;
 
 pub fn append_log(state: &AppState, data: &str) -> bool {
@@ -174,10 +175,8 @@ pub async fn get_quiz(state: State<'_, AppState>) -> Result<String, AppError> {
         .header("x-api-secret", &config.exalise.http_settings.http_secret)
         .header("x-master-device-key", &config.exalise.mqtt_settings.device_key)
         .send()
-        .await?
-        .text()
         .await?;
-    Ok(res)
+    read_api_response(res).await
 }
 
 #[tauri::command(async)]
@@ -199,10 +198,8 @@ pub async fn get_question(
         .header("x-api-secret", &config.exalise.http_settings.http_secret)
         .header("x-master-device-key", &config.exalise.mqtt_settings.device_key)
         .send()
-        .await?
-        .text()
         .await?;
-    Ok(res)
+    read_api_response(res).await
 }
 
 #[tauri::command(async)]
@@ -218,8 +215,6 @@ pub async fn get_end_answer(
         .header("x-api-secret", &config.exalise.http_settings.http_secret)
         .header("x-master-device-key", &config.exalise.mqtt_settings.device_key)
         .send()
-        .await?
-        .text()
         .await?;
-    Ok(res)
+    read_api_response(res).await
 }

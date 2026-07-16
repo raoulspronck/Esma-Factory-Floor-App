@@ -14,6 +14,7 @@ import {
   ModalFooter,
   ModalHeader,
   ModalOverlay,
+  Select,
   useBreakpointValue,
   useToast,
 } from "@chakra-ui/react";
@@ -29,6 +30,9 @@ interface GeneralSettingsModalProps {
 
   automaticLoadDashboard: string;
   setAutomaticLoadDashboard: React.Dispatch<React.SetStateAction<string>>;
+
+  dashboardRows: number;
+  setDashboardRows: React.Dispatch<React.SetStateAction<number>>;
 }
 
 const GeneralSettingsModal: React.FC<GeneralSettingsModalProps> = ({
@@ -38,6 +42,8 @@ const GeneralSettingsModal: React.FC<GeneralSettingsModalProps> = ({
   gestureControl,
   setAutomaticLoadDashboard,
   setGestureControl,
+  dashboardRows,
+  setDashboardRows,
 }) => {
   const modalSize = useBreakpointValue(["xs", "sm", "lg"]);
   const buttonSize = useBreakpointValue(["sm", "md", "lg"]);
@@ -53,6 +59,7 @@ const GeneralSettingsModal: React.FC<GeneralSettingsModalProps> = ({
         invoke("save_basic_settings", {
           gesture: gestureControl,
           dashboard: automaticLoadDashboard,
+          rows: dashboardRows,
         })
           .then((_e) => res(true))
           .catch((_e) => {
@@ -100,6 +107,24 @@ const GeneralSettingsModal: React.FC<GeneralSettingsModalProps> = ({
               >
                 Automatically load default dashboard
               </Checkbox>
+            </FormControl>
+          </Box>
+
+          <Box mt={5}>
+            <FormControl>
+              <FormLabel fontSize={["sm", "md", "lg"]}>
+                Dashboard grid rows per device
+              </FormLabel>
+              <Select
+                value={dashboardRows}
+                onChange={(e) => setDashboardRows(parseInt(e.target.value))}
+              >
+                {[4, 5, 6, 7, 8, 9, 10].map((n) => (
+                  <option value={n} key={n}>
+                    {n} rows
+                  </option>
+                ))}
+              </Select>
             </FormControl>
           </Box>
         </ModalBody>

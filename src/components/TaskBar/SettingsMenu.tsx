@@ -42,6 +42,7 @@ export default function SettingsMenu() {
   // General / basic settings form state
   const [gestureControl, setGestureControl] = useState("");
   const [automaticLoadDashboard, setAutomaticLoadDashboard] = useState("");
+  const [dashboardRows, setDashboardRows] = useState(7);
 
   const initialized = useRef(false);
   useEffect(() => {
@@ -77,6 +78,7 @@ export default function SettingsMenu() {
         const res = JSON.parse(e as string);
         setGestureControl(res.gesture_control);
         setAutomaticLoadDashboard(res.automatic_load_dashboard);
+        setDashboardRows(res.dashboard_rows ?? 7);
       })
       .catch(console.log);
   }, []);
@@ -183,6 +185,7 @@ export default function SettingsMenu() {
           gestureControl={gestureControl} setGestureControl={setGestureControl}
           automaticLoadDashboard={automaticLoadDashboard}
           setAutomaticLoadDashboard={setAutomaticLoadDashboard}
+          dashboardRows={dashboardRows} setDashboardRows={setDashboardRows}
         />
       </MenuList>
     </Menu>

@@ -8,6 +8,11 @@ pub enum AppError {
     Json(#[from] serde_json::Error),
     #[error("HTTP error: {0}")]
     Http(#[from] reqwest::Error),
+    /// Non-2xx response from the Exalise API: status code + (truncated) body,
+    /// so the frontend can show *why* a call failed instead of choking on an
+    /// error body that was passed through as if it were data.
+    #[error("API error {0}: {1}")]
+    Api(u16, String),
     #[error("{0}")]
     Other(String),
 }

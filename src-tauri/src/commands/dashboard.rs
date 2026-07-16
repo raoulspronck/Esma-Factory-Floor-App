@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -6,8 +7,215 @@ use tauri::State;
 use crate::config::save_json;
 use crate::error::AppError;
 use crate::commands::misc::append_log;
-use crate::models::dashboard::{Dashboard, Device, Layout, ValueResponse};
+use crate::models::dashboard::{legacy, v2, Dashboard, Device, ValueResponse, Widget};
+use crate::services::http::read_api_response;
 use crate::state::AppState;
+
+/// Each device owns a 2-column strip; max 5 strips per dashboard. Rows per
+/// strip default to 7 (the frontend can show more/fewer via the
+/// `dashboard_rows` basic setting) - migrations pack to this default.
+const STRIP_COLS: i32 = 2;
+const STRIP_ROWS: i32 = 7;
+pub const MAX_DEVICES: usize = 5;
+
+/// Reads `dashboard.exalise.json`, transparently migrating older formats:
+/// v3 (per-device strips, `version` marker) is parsed natively; v2 (flat
+/// 10-column grid with global widget coords, no `version`) and v1
+/// (device-level `Layout` grid + `Widget.height` row budget) are migrated.
+/// Every device/widget/datapoint is preserved - only geometry is recomputed,
+/// since older layouts have no meaning inside a 2x8 device strip. The
+/// migrated file is written back immediately so later reads take the fast
+/// native-parse path.
+pub fn load_dashboard(path: &Path) -> Dashboard {
+    let Ok(content) = std::fs::read_to_string(path) else {
+        return Dashboard::default();
+    };
+
+    // v3 requires the `version` field, so older files fall through.
+    if let Ok(dashboard) = serde_json::from_str::<Dashboard>(&content) {
+        return dashboard;
+    }
+
+    // v2 requires per-widget x/y/w/h, so v1 files fall through.
+    if let Ok(old) = serde_json::from_str::<v2::Dashboard>(&content) {
+        let migrated = migrate_v2_dashboard(old);
+        let _ = save_json(path, &migrated);
+        return migrated;
+    }
+
+    if let Ok(old) = serde_json::from_str::<legacy::Dashboard>(&content) {
+        let migrated = migrate_legacy_dashboard(old);
+        let _ = save_json(path, &migrated);
+        return migrated;
+    }
+
+    Dashboard::default()
+}
+
+/// v1 widgets only ever carried a row-count `height`; approximate a sane
+/// strip size from it. The "Two Default/…" composite type laid two stats out
+/// side by side, so it maps to a full-strip-width 2x1 cell; the old
+/// `height >= 3` circular-progress budget maps to 2x2.
+fn legacy_widget_size(name: &str, height: u32) -> (i32, i32) {
+    if name.starts_with("Two Default") {
+        (2, 1)
+    } else if height >= 3 {
+        (2, 2)
+    } else {
+        (1, 1)
+    }
+}
+
+/// First-fit scan for a free `w`x`h` rect, row-major from (0,0), within a
+/// grid `cols` wide. Rows are unbounded here - callers that must fit a strip
+/// handle overflow themselves (see `pack_strip`).
+fn find_free_slot(placed: &[(i32, i32, i32, i32)], w: i32, h: i32, cols: i32) -> (i32, i32) {
+    let mut y = 0;
+    loop {
+        let mut x = 0;
+        while x + w <= cols {
+            let collides = placed.iter().any(|&(px, py, pw, ph)| {
+                x < px + pw && x + w > px && y < py + ph && y + h > py
+            });
+            if !collides {
+                return (x, y);
+            }
+            x += 1;
+        }
+        y += 1;
+    }
+}
+
+/// Packs `sizes` (w, h) in order into a 2-column strip. If the packed result
+/// is taller than the strip's 8 rows, every height is scaled down
+/// proportionally (min 1) and packed again so the strip fits - a migration
+/// must produce a layout the user can actually see and rearrange, not one
+/// clipped behind overflow:hidden. Only a device with more than 16 unit
+/// cells can still overflow, in which case the tail is left below row 8.
+fn pack_strip(sizes: &[(i32, i32)]) -> Vec<(i32, i32, i32, i32)> {
+    let place = |sizes: &[(i32, i32)]| -> Vec<(i32, i32, i32, i32)> {
+        let mut placed: Vec<(i32, i32, i32, i32)> = vec![];
+        for &(w, h) in sizes {
+            let (x, y) = find_free_slot(&placed, w, h, STRIP_COLS);
+            placed.push((x, y, w, h));
+        }
+        placed
+    };
+
+    let first = place(sizes);
+    let needed = first.iter().map(|&(_, y, _, h)| y + h).max().unwrap_or(0);
+    if needed <= STRIP_ROWS {
+        return first;
+    }
+
+    let scaled: Vec<(i32, i32)> = sizes
+        .iter()
+        .map(|&(w, h)| (w, ((h * STRIP_ROWS) / needed).max(1)))
+        .collect();
+    place(&scaled)
+}
+
+/// Shared tail of both migrations: given each widget's target (w, h), pack
+/// them into the device's strip and stamp the resulting local coordinates.
+fn pack_device_widgets<W, F>(widgets: Vec<W>, size_of: F) -> Vec<Widget>
+where
+    F: Fn(&W) -> (i32, i32),
+    W: Into<Widget>,
+{
+    let sizes: Vec<(i32, i32)> = widgets.iter().map(&size_of).collect();
+    let rects = pack_strip(&sizes);
+    widgets
+        .into_iter()
+        .zip(rects)
+        .map(|(w, (x, y, width, height))| {
+            let mut widget: Widget = w.into();
+            widget.x = x;
+            widget.y = y;
+            widget.w = width;
+            widget.h = height;
+            widget
+        })
+        .collect()
+}
+
+impl From<v2::Widget> for Widget {
+    fn from(w: v2::Widget) -> Widget {
+        Widget {
+            id: w.id,
+            name: w.name,
+            x: 0,
+            y: 0,
+            w: w.w,
+            h: w.h,
+            datapoints: w.datapoints,
+        }
+    }
+}
+
+impl From<legacy::Widget> for Widget {
+    fn from(w: legacy::Widget) -> Widget {
+        Widget {
+            id: w.id,
+            name: w.name,
+            x: 0,
+            y: 0,
+            w: 1,
+            h: 1,
+            datapoints: w.datapoints,
+        }
+    }
+}
+
+/// v2 -> v3: widgets kept in their visual order (sorted by global y then x),
+/// widths/heights clamped to what a 2x8 strip can hold, then packed.
+fn migrate_v2_dashboard(old: v2::Dashboard) -> Dashboard {
+    let devices = old
+        .devices
+        .into_iter()
+        .map(|d| {
+            let mut widgets = d.widgets;
+            widgets.sort_by_key(|w| (w.y, w.x));
+            let packed = pack_device_widgets(widgets, |w| {
+                (w.w.clamp(1, STRIP_COLS), w.h.clamp(1, STRIP_ROWS))
+            });
+
+            Device {
+                id: d.id,
+                name: d.name,
+                key: d.key,
+                widgets: packed,
+            }
+        })
+        .collect();
+
+    Dashboard {
+        version: 3,
+        devices,
+    }
+}
+
+fn migrate_legacy_dashboard(old: legacy::Dashboard) -> Dashboard {
+    let devices = old
+        .devices
+        .into_iter()
+        .map(|d| {
+            let packed =
+                pack_device_widgets(d.widgets, |w| legacy_widget_size(&w.name, w.height));
+
+            Device {
+                id: d.id,
+                name: d.name,
+                key: d.key,
+                widgets: packed,
+            }
+        })
+        .collect();
+
+    Dashboard {
+        version: 3,
+        devices,
+    }
+}
 
 /// The set of device keys this installation actually owns, given a dashboard's
 /// devices and the kiosk's own master device key. See `AppState::known_device_keys`.
@@ -21,16 +229,160 @@ pub fn known_keys_from_dashboard(dashboard: &Dashboard, master_device_key: &str)
 /// it - used at startup, before `AppState` exists to hold an in-memory `Dashboard`.
 pub fn compute_known_device_keys(settings_dir: &std::path::Path, master_device_key: &str) -> HashSet<String> {
     let path = settings_dir.join("dashboard.exalise.json");
-    let dashboard: Dashboard = std::fs::read_to_string(&path)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default();
+    let dashboard = load_dashboard(&path);
     known_keys_from_dashboard(&dashboard, master_device_key)
 }
 
 async fn refresh_known_device_keys(dashboard: &Dashboard, state: &AppState) {
     let master_device_key = state.config.read().await.exalise.mqtt_settings.device_key.clone();
     *state.known_device_keys.write().await = known_keys_from_dashboard(dashboard, &master_device_key);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn overlaps(a: (i32, i32, i32, i32), b: (i32, i32, i32, i32)) -> bool {
+        a.0 < b.0 + b.2 && a.0 + a.2 > b.0 && a.1 < b.1 + b.3 && a.1 + a.3 > b.1
+    }
+
+    fn assert_strip_valid(device: &Device) {
+        let rects: Vec<(i32, i32, i32, i32)> =
+            device.widgets.iter().map(|w| (w.x, w.y, w.w, w.h)).collect();
+        for i in 0..rects.len() {
+            for j in (i + 1)..rects.len() {
+                assert!(
+                    !overlaps(rects[i], rects[j]),
+                    "device {}: widgets {} and {} overlap",
+                    device.name,
+                    i,
+                    j
+                );
+            }
+            let (x, y, w, h) = rects[i];
+            assert!(x >= 0 && x + w <= STRIP_COLS, "widget exceeds strip width");
+            assert!(y >= 0 && y + h <= STRIP_ROWS, "widget exceeds strip height");
+        }
+    }
+
+    #[test]
+    fn migrate_v1_packs_each_device_into_its_strip() {
+        let old = legacy::Dashboard {
+            devices: vec![legacy::Device {
+                id: "d1".into(),
+                name: "Lathe #2".into(),
+                key: "lathe-2".into(),
+                widgets: vec![
+                    legacy::Widget {
+                        id: "w1".into(),
+                        name: "Default".into(),
+                        height: 1,
+                        datapoints: vec!["rpm".into()],
+                    },
+                    legacy::Widget {
+                        id: "w2".into(),
+                        name: "Circular progress".into(),
+                        height: 3,
+                        datapoints: vec!["progress".into()],
+                    },
+                    legacy::Widget {
+                        id: "w3".into(),
+                        name: "Two Default/Default/Default".into(),
+                        height: 1,
+                        datapoints: vec!["a".into(), "b".into()],
+                    },
+                ],
+            }],
+        };
+
+        let migrated = migrate_legacy_dashboard(old);
+
+        assert_eq!(migrated.version, 3);
+        assert_eq!(migrated.devices.len(), 1);
+        let device = &migrated.devices[0];
+        assert_eq!(device.id, "d1");
+        assert_eq!(device.widgets.len(), 3);
+
+        let by_id = |id: &str| device.widgets.iter().find(|w| w.id == id).unwrap();
+        assert_eq!(by_id("w1").datapoints, vec!["rpm".to_string()]);
+        let w1 = by_id("w1");
+        assert_eq!((w1.x, w1.y, w1.w, w1.h), (0, 0, 1, 1));
+        let w2 = by_id("w2");
+        assert_eq!((w2.x, w2.y, w2.w, w2.h), (0, 1, 2, 2));
+        let w3 = by_id("w3");
+        assert_eq!((w3.x, w3.y, w3.w, w3.h), (0, 3, 2, 1));
+
+        assert_strip_valid(device);
+    }
+
+    /// Mirrors the real pre-v3 `dashboard.exalise.json` (flat 10-col global
+    /// coords, including a device whose stacked heights exceed the 8-row
+    /// strip and must be squashed to fit).
+    #[test]
+    fn migrate_v2_fits_every_device_into_a_strip() {
+        let json = r#"{
+          "devices": [
+            {
+              "id": "dev-robot", "name": "Robot pinmachine", "key": "key-robot",
+              "widgets": [
+                { "id": "r1", "name": "Two Default/Time prediction/Time prediction", "x": 0, "y": 3, "w": 2, "h": 1, "datapoints": ["Min-order-time", "Avg-order-time"] },
+                { "id": "r2", "name": "Two Default/Default/Default", "x": 2, "y": 4, "w": 3, "h": 4, "datapoints": ["Min-order-time", "Avg-order-time"] },
+                { "id": "r3", "name": "Two Default/Default/Default", "x": 0, "y": 4, "w": 2, "h": 4, "datapoints": ["Run-time", "Z-maat"] },
+                { "id": "r4", "name": "Circular progress with variable color", "x": 0, "y": 8, "w": 2, "h": 4, "datapoints": ["Pinasjes-gemaakt", "Pinasjes-te-maken", "Lamp"] }
+              ]
+            },
+            {
+              "id": "dev-v80", "name": "V-80", "key": "key-v80",
+              "widgets": [
+                { "id": "a1", "name": "Default", "x": 8, "y": 0, "w": 1, "h": 1, "datapoints": ["ORDER"] },
+                { "id": "a2", "name": "Two Default/Time prediction/Time prediction", "x": 0, "y": 1, "w": 2, "h": 1, "datapoints": ["Min-order-time", "Avg-order-time"] },
+                { "id": "a3", "name": "Two Default/Default/Default", "x": 2, "y": 1, "w": 2, "h": 1, "datapoints": ["Min-order-time", "Avg-order-time"] },
+                { "id": "a4", "name": "Default", "x": 9, "y": 0, "w": 1, "h": 1, "datapoints": ["Run-stop-time"] },
+                { "id": "a5", "name": "Two Default/Default/Default", "x": 4, "y": 1, "w": 2, "h": 1, "datapoints": ["PARTS", "TOOL"] },
+                { "id": "a6", "name": "Timer", "x": 8, "y": 1, "w": 1, "h": 1, "datapoints": ["STATUS"] },
+                { "id": "a7", "name": "Custom input", "x": 9, "y": 1, "w": 1, "h": 1, "datapoints": ["Parts-to-make"] }
+              ]
+            }
+          ]
+        }"#;
+
+        let old: v2::Dashboard = serde_json::from_str(json).unwrap();
+        let migrated = migrate_v2_dashboard(old);
+
+        assert_eq!(migrated.version, 3);
+        assert_eq!(migrated.devices.len(), 2);
+
+        // Device 1: stacked heights were 1+4+4+4 = 13 rows -> squashed to fit.
+        let robot = &migrated.devices[0];
+        assert_eq!(robot.widgets.len(), 4);
+        let by_id = |d: &Device, id: &str| {
+            let w = d.widgets.iter().find(|w| w.id == id).unwrap().clone();
+            (w.x, w.y, w.w, w.h)
+        };
+        assert_eq!(by_id(robot, "r1"), (0, 0, 2, 1));
+        assert_eq!(by_id(robot, "r3"), (0, 1, 2, 2));
+        assert_eq!(by_id(robot, "r2"), (0, 3, 2, 2));
+        assert_eq!(by_id(robot, "r4"), (0, 5, 2, 2));
+        assert_strip_valid(robot);
+
+        // Device 2: all 1-row widgets, visual order preserved (y, then x).
+        let v80 = &migrated.devices[1];
+        assert_eq!(by_id(v80, "a1"), (0, 0, 1, 1));
+        assert_eq!(by_id(v80, "a4"), (1, 0, 1, 1));
+        assert_eq!(by_id(v80, "a2"), (0, 1, 2, 1));
+        assert_eq!(by_id(v80, "a3"), (0, 2, 2, 1));
+        assert_eq!(by_id(v80, "a5"), (0, 3, 2, 1));
+        assert_eq!(by_id(v80, "a6"), (0, 4, 1, 1));
+        assert_eq!(by_id(v80, "a7"), (1, 4, 1, 1));
+        assert_strip_valid(v80);
+
+        // Datapoints survive untouched.
+        let r4 = robot.widgets.iter().find(|w| w.id == "r4").unwrap();
+        assert_eq!(
+            r4.datapoints,
+            vec!["Pinasjes-gemaakt".to_string(), "Pinasjes-te-maken".to_string(), "Lamp".to_string()]
+        );
+    }
 }
 
 #[derive(Deserialize)]
@@ -42,19 +394,23 @@ struct DashboardDataResponse {
 /// What `get_dashboard_data` hands back to the frontend: device shape data plus
 /// a full snapshot of the last-value cache, so the UI can hydrate in one call
 /// instead of each widget separately calling `get_last_value`.
+///
+/// `devices` is `None` (JSON `null`) when the upstream fetch failed and no
+/// cached snapshot exists - distinct from `{}` (a genuinely empty dashboard).
+/// The frontend keeps its current device shapes and retries on `null`; the
+/// old behavior of returning `{}` on failure silently wiped every widget's
+/// datapoint definitions and defeated the frontend's retry logic.
 #[derive(Serialize)]
 pub struct DashboardDataOut {
-    devices: serde_json::Value,
+    devices: Option<serde_json::Value>,
     values: HashMap<String, String>,
 }
 
 #[tauri::command(async)]
 pub async fn get_dashboard(state: State<'_, AppState>) -> Result<String, AppError> {
     let path = state.settings_dir.join("dashboard.exalise.json");
-    let content = std::fs::read_to_string(&path).unwrap_or_else(|_| {
-        serde_json::to_string_pretty(&Dashboard::default()).unwrap()
-    });
-    Ok(content)
+    let dashboard = load_dashboard(&path);
+    Ok(serde_json::to_string_pretty(&dashboard).unwrap())
 }
 
 #[tauri::command(async)]
@@ -64,24 +420,21 @@ pub async fn save_device_to_dashboard(
 ) -> Result<Dashboard, AppError> {
     let path = state.settings_dir.join("dashboard.exalise.json");
 
-    let mut dashboard: Dashboard = std::fs::read_to_string(&path)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default();
-
-    let layout = Layout {
-        i: device.id.clone(),
-        x: 0,
-        y: 0,
-        w: 1,
-        h: 1,
-    };
-
+    let mut dashboard = load_dashboard(&path);
+    if dashboard.devices.len() >= MAX_DEVICES {
+        return Err(AppError::Other(format!(
+            "Dashboard is full (max {} devices)",
+            MAX_DEVICES
+        )));
+    }
     dashboard.devices.push(device);
-    dashboard.layout.push(layout);
 
     save_json(&path, &dashboard)?;
     refresh_known_device_keys(&dashboard, &state).await;
+    // The cached device_data snapshot predates this device - drop it so the
+    // next get_dashboard_data fetches the new device's shape/datapoints
+    // instead of serving a stale cache that doesn't know the device exists.
+    *state.device_data.write().await = None;
     Ok(dashboard)
 }
 
@@ -93,6 +446,9 @@ pub async fn save_widget_to_dashboard(
     let path = state.settings_dir.join("dashboard.exalise.json");
     save_json(&path, &dashboard)?;
     refresh_known_device_keys(&dashboard, &state).await;
+    // A new widget may reference datapoints whose latest value isn't cached
+    // yet - invalidate so the next get_dashboard_data fetches them.
+    *state.device_data.write().await = None;
     Ok(dashboard)
 }
 
@@ -114,18 +470,13 @@ pub async fn save_dashboard_layout(
 /// which fired concurrently on every dashboard mount and were spiking DB CPU.
 async fn fetch_dashboard_data(state: &AppState) -> Result<serde_json::Value, AppError> {
     let path = state.settings_dir.join("dashboard.exalise.json");
-    let dashboard: Dashboard = match std::fs::read_to_string(&path)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-    {
-        Some(d) => d,
-        None => {
-            append_log(state, "fetch_dashboard_data: dashboard.exalise.json not found or invalid");
-            let empty = serde_json::json!({});
-            *state.device_data.write().await = Some(empty.clone());
-            return Ok(empty);
-        }
-    };
+    let dashboard = load_dashboard(&path);
+    if !path.exists() {
+        append_log(state, "fetch_dashboard_data: dashboard.exalise.json not found or invalid");
+        let empty = serde_json::json!({});
+        *state.device_data.write().await = Some(empty.clone());
+        return Ok(empty);
+    }
 
     append_log(
         state,
@@ -158,8 +509,8 @@ async fn fetch_dashboard_data(state: &AppState) -> Result<serde_json::Value, App
             e
         })?;
 
-    let text = response.text().await.map_err(|e| {
-        append_log(state, &format!("fetch_dashboard_data response read failed: {}", e));
+    let text = read_api_response(response).await.map_err(|e| {
+        append_log(state, &format!("fetch_dashboard_data failed: {}", e));
         e
     })?;
 
@@ -219,26 +570,26 @@ pub async fn prefetch_dashboard_data(state: &AppState) {
 /// A failed fetch never propagates as an error here: `values` is already
 /// seeded from `last_values.cache.json` at startup (and kept current by
 /// MQTT), so one transient HTTP failure - e.g. network not up yet right
-/// after Windows-login autostart - used to blank the entire dashboard
-/// instead of just leaving `devices` (connected status/shape) empty until
-/// the next retry succeeds.
+/// after Windows-login autostart - must not blank the dashboard. Instead
+/// `devices` comes back as `null`, telling the frontend "keep what you have
+/// and retry later" (see `DashboardDataOut`).
 #[tauri::command(async)]
 pub async fn get_dashboard_data(state: State<'_, AppState>) -> Result<DashboardDataOut, AppError> {
     let devices = if let Some(data) = state.device_data.read().await.clone() {
-        data
+        Some(data)
     } else {
         let _guard = state.dashboard_fetch_lock.lock().await;
         if let Some(data) = state.device_data.read().await.clone() {
-            data
+            Some(data)
         } else {
             match fetch_dashboard_data(&state).await {
-                Ok(data) => data,
+                Ok(data) => Some(data),
                 Err(e) => {
                     append_log(
                         &state,
-                        &format!("get_dashboard_data: fetch failed, returning cached values with empty device data: {}", e),
+                        &format!("get_dashboard_data: fetch failed, returning cached values with devices=null: {}", e),
                     );
-                    serde_json::json!({})
+                    None
                 }
             }
         }

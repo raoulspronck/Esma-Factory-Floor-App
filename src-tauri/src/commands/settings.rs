@@ -112,6 +112,7 @@ pub fn get_basic_settings(state: State<'_, AppState>) -> Result<String, AppError
 pub async fn save_basic_settings(
     gesture: String,
     dashboard: String,
+    rows: u32,
     state: State<'_, AppState>,
 ) -> Result<String, AppError> {
     let path = state.settings_dir.join("basic.settings.json");
@@ -119,6 +120,7 @@ pub async fn save_basic_settings(
     config.basic = BasicSettings {
         gesture_control: gesture,
         automatic_load_dashboard: dashboard,
+        dashboard_rows: rows.clamp(4, 12),
     };
     save_json(&path, &config.basic)?;
     Ok("Saved".into())

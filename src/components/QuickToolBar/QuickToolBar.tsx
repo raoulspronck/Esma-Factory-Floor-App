@@ -6,8 +6,9 @@ import CalculatorModal from "./modals/CalculatorModal";
 import SpindleModal from "./modals/SpindleModal";
 import CallingAlert from "./alerts/CallingAlert";
 import DynamicComponent from "../DynamicIconImport";
-import { MdQuiz } from "react-icons/md";
+import { MdCable, MdQuiz } from "react-icons/md";
 import QuizModal from "./modals/QuizModal";
+import RS232MonitorModal from "./modals/RS232MonitorModal";
 
 const QuickToolBar: React.FC<{ children?: React.ReactNode }> = ({
   children,
@@ -27,6 +28,12 @@ const QuickToolBar: React.FC<{ children?: React.ReactNode }> = ({
     isOpen: isOpenCallingAlert,
     onOpen: onOpenCallingAlert,
     onClose: onCloseCallingAlert,
+  } = useDisclosure();
+
+  const {
+    isOpen: isOpenRS232Monitor,
+    onOpen: onOpenRS232Monitor,
+    onClose: onCloseRS232Monitor,
   } = useDisclosure();
 
   const callJohn = () => {
@@ -78,9 +85,24 @@ const QuickToolBar: React.FC<{ children?: React.ReactNode }> = ({
         onClick={onOpenQuiz}
       />
 
+      <IconButton
+        ml={3}
+        icon={<MdCable color={"white"} />}
+        aria-label="RS-232 monitor"
+        colorScheme={"blackAlpha"}
+        height={"80px"}
+        width="80px"
+        fontSize={"50px"}
+        onClick={onOpenRS232Monitor}
+      />
+
       <CallingAlert isOpen={isOpenCallingAlert} onClose={onCloseCallingAlert} />
       <CalculatorModal isOpen={isOpenCalculator} onClose={onCloseCalculator} />
       <QuizModal isOpen={isOpenQuiz} onClose={onCloseQuiz} />
+      <RS232MonitorModal
+        isOpen={isOpenRS232Monitor}
+        onClose={onCloseRS232Monitor}
+      />
     </Flex>
   );
 };
