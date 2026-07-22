@@ -145,15 +145,6 @@ export default function EventManager(): null {
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
-<<<<<<< Updated upstream
-    const scheduleRetry = (attempt: number) => {
-      // Fetch failures are usually transient (network not up yet post
-      // Windows-login autostart, or the API's DB briefly saturated) — back
-      // off and retry instead of leaving the dashboard un-hydrated until
-      // the user notices and clicks "Refetch" themselves.
-      const delay = Math.min(2000 * 2 ** attempt, 30000);
-      retryTimer = setTimeout(() => fetchDashboardData(attempt + 1), delay);
-=======
     // Hydrate the stores from a (devices, values) snapshot - used by both the
     // pull path (get_dashboard_data) and the backend push (dashboard-hydrated).
     // Display is driven by `values` (disk-seeded + MQTT-updated), so an empty
@@ -199,7 +190,6 @@ export default function EventManager(): null {
       }
       setLastValues(rawValues);
       setLastValueTimestamps(timestamps);
->>>>>>> Stashed changes
     };
 
     const fetchDashboardData = (attempt = 0) => {
@@ -211,50 +201,15 @@ export default function EventManager(): null {
       getDashboardData()
         .then(({ devices, values }) => {
           if (cancelled) return;
-<<<<<<< Updated upstream
-
-          // Most entries in `values` are the JSON-wrapped shape the old
-          // per-widget get_last_value calls used to return (`{id, value, key,
-          // createdAt}`, stringified) - but any datapoint touched by a live
-          // MQTT update since the last HTTP fetch holds the raw, unwrapped
-          // payload instead (mqtt_service.rs caches payloads as-is). Unwrap
-          // when it's the wrapped shape; otherwise treat the string itself as
-          // the value, same as the live `notification---*` listener does.
-          const rawValues: Record<string, string> = {};
-          const timestamps: Record<string, string> = {};
-          for (const [key, wrapped] of Object.entries(values)) {
-            try {
-              const parsed = JSON.parse(wrapped);
-              if (parsed && typeof parsed === "object" && "value" in parsed) {
-                rawValues[key] = parsed.value;
-                if (parsed.createdAt) timestamps[key] = parsed.createdAt;
-              } else {
-                rawValues[key] = wrapped;
-              }
-            } catch (_) {
-              rawValues[key] = wrapped;
-            }
-          }
-          setLastValues(rawValues);
-          setLastValueTimestamps(timestamps);
-
-          // `devices === null` means the backend's upstream fetch failed and
-          // it has no cached snapshot. Keep whatever shapes we already have
-          // (overwriting with nothing used to blank every widget to
-          // "Loading...") and retry with backoff.
-          if (devices === null) {
-            scheduleRetry(attempt);
-            return;
-          }
-          setDeviceData(devices);
-=======
           applyDashboardData(devices, values);
 
-          // An empty device shape means the backend fetch hasn't succeeded yet
-          // (cold boot, network not up). Keep retrying so `connected` status and
-          // datapoint types eventually resolve; the backend's retry loop also
-          // pushes `dashboard-hydrated` once it succeeds. Any cached values are
-          // already shown regardless.
+          // `devices === null` (or an empty shape) means the backend fetch
+          // hasn't succeeded yet - it failed with no disk cache (cold boot,
+          // network not up). `applyDashboardData` already preserved any shape
+          // we had; keep retrying so `connected` status and datapoint types
+          // eventually resolve. The backend's own retry loop also pushes
+          // `dashboard-hydrated` once it succeeds. Cached values are shown
+          // regardless.
           const deviceCount = devices ? Object.keys(devices).length : 0;
           if (deviceCount === 0) {
             const delay = Math.min(2000 * 2 ** attempt, 30000);
@@ -263,21 +218,10 @@ export default function EventManager(): null {
             );
             retryTimer = setTimeout(() => fetchDashboardData(attempt + 1), delay);
           }
->>>>>>> Stashed changes
         })
         .catch((err) => {
           console.error("[hydrate] get_dashboard_data failed:", err);
           if (cancelled) return;
-<<<<<<< Updated upstream
-          scheduleRetry(attempt);
-        });
-    };
-
-    // Initial hydration - one call instead of one `get_device` per device plus
-    // one `get_last_value` per widget datapoint. Re-runs whenever the device/
-    // datapoint set changes (the backend invalidates its cache on those saves,
-    // so this refetch brings in the new device's shape and values).
-=======
           // Transient failures right after launch (network not up yet post
           // Windows-login autostart) - back off and retry instead of leaving the
           // dashboard blank until someone clicks "Refetch".
@@ -287,8 +231,9 @@ export default function EventManager(): null {
     };
 
     // Initial pull - one call instead of one `get_device` per device plus one
-    // `get_last_value` per widget datapoint.
->>>>>>> Stashed changes
+    // `get_last_value` per widget datapoint. Re-runs whenever the device/
+    // datapoint set changes (hydrationSignature), since the backend invalidates
+    // its cache on those saves and this refetch brings in the new shape/values.
     fetchDashboardData();
 
     // Backend push: fires whenever a fresh fetch succeeds (startup prefetch, the

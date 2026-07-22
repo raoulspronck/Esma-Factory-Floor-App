@@ -512,16 +512,13 @@ async fn fetch_dashboard_data(
             e
         })?;
 
-<<<<<<< Updated upstream
-    let text = read_api_response(response).await.map_err(|e| {
-        append_log(state, &format!("fetch_dashboard_data failed: {}", e));
-=======
     let status = response.status();
     append_log(state, &format!("fetch_dashboard_data: HTTP status {}", status));
 
-    let text = response.text().await.map_err(|e| {
-        append_log(state, &format!("fetch_dashboard_data response read failed: {}", e));
->>>>>>> Stashed changes
+    // read_api_response turns any non-2xx into AppError::Api(status, body) so an
+    // error body never reaches the JSON parser as if it were data.
+    let text = read_api_response(response).await.map_err(|e| {
+        append_log(state, &format!("fetch_dashboard_data failed: {}", e));
         e
     })?;
 
@@ -618,7 +615,7 @@ async fn emit_hydration(state: &AppState, app_handle: &AppHandle, devices: &serd
     let values = state.last_values.read().await.clone();
     let value_count = values.len();
     let payload = DashboardDataOut {
-        devices: devices.clone(),
+        devices: Some(devices.clone()),
         values,
     };
     match app_handle.get_window("main") {
@@ -656,21 +653,14 @@ pub async fn prefetch_dashboard_data(state: &AppState, app_handle: &AppHandle) -
 /// last-value cache, fetching first if nothing is cached yet. Concurrent
 /// callers on a cold cache share one in-flight fetch instead of firing one each.
 ///
-<<<<<<< Updated upstream
-/// A failed fetch never propagates as an error here: `values` is already
-/// seeded from `last_values.cache.json` at startup (and kept current by
-/// MQTT), so one transient HTTP failure - e.g. network not up yet right
-/// after Windows-login autostart - must not blank the dashboard. Instead
-/// `devices` comes back as `null`, telling the frontend "keep what you have
-/// and retry later" (see `DashboardDataOut`).
-=======
 /// A failed fetch never propagates as an error here, so a transient HTTP failure
 /// (e.g. network not up yet right after Windows-login autostart) can't blank the
-/// dashboard. Instead it falls back to the last device shape persisted to disk
-/// (`device_data.cache.json`) so widget types still resolve, while `values` come
-/// from the disk-seeded, MQTT-updated `last_values`. The background retry loop
-/// then fetches fresh data and pushes it via `dashboard-hydrated`.
->>>>>>> Stashed changes
+/// dashboard. It first falls back to the last device shape persisted to disk
+/// (`device_data.cache.json`) so widget types still resolve on a cold start; if
+/// there's no disk cache either, `devices` comes back as `null`, telling the
+/// frontend to keep what it has and retry later (see `DashboardDataOut`). Either
+/// way `values` come from the disk-seeded, MQTT-updated `last_values`, and the
+/// background retry loop fetches fresh data and pushes it via `dashboard-hydrated`.
 #[tauri::command(async)]
 pub async fn get_dashboard_data(
     state: State<'_, AppState>,
@@ -683,19 +673,14 @@ pub async fn get_dashboard_data(
         if let Some(data) = state.device_data.read().await.clone() {
             Some(data)
         } else {
-<<<<<<< Updated upstream
-            match fetch_dashboard_data(&state).await {
+            match fetch_dashboard_data(&state, &app_handle).await {
                 Ok(data) => Some(data),
                 Err(e) => {
-                    append_log(
-                        &state,
-                        &format!("get_dashboard_data: fetch failed, returning cached values with devices=null: {}", e),
-                    );
-                    None
-=======
-            match fetch_dashboard_data(&state, &app_handle).await {
-                Ok(data) => data,
-                Err(e) => {
+                    // Prefer the last device shape persisted to disk so widget
+                    // types still resolve on a cold start; if there's no disk
+                    // cache either, return None so the frontend keeps whatever it
+                    // has and the background retry loop (which pushes
+                    // `dashboard-hydrated`) fills it in.
                     let disk = std::fs::read_to_string(
                         crate::services::cache_persist::device_data_cache_path(&state),
                     )
@@ -707,17 +692,16 @@ pub async fn get_dashboard_data(
                                 &state,
                                 &format!("get_dashboard_data: fetch failed ({}); using device shape from disk cache", e),
                             );
-                            d
+                            Some(d)
                         }
                         None => {
                             append_log(
                                 &state,
-                                &format!("get_dashboard_data: fetch failed ({}) and no disk device cache; returning empty shape with cached values", e),
+                                &format!("get_dashboard_data: fetch failed ({}) and no disk device cache; returning devices=null", e),
                             );
-                            serde_json::json!({})
+                            None
                         }
                     }
->>>>>>> Stashed changes
                 }
             }
         }
@@ -728,7 +712,7 @@ pub async fn get_dashboard_data(
         &state,
         &format!(
             "get_dashboard_data: returning {} device shapes, {} values",
-            devices.as_object().map(|o| o.len()).unwrap_or(0),
+            devices.as_ref().and_then(|d| d.as_object()).map(|o| o.len()).unwrap_or(0),
             values.len()
         ),
     );
