@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 
 use crate::config::save_json;
 use crate::error::AppError;
@@ -468,7 +468,10 @@ pub async fn save_dashboard_layout(
 /// populates both in-memory caches. Replaces what used to be one `get_device`
 /// call per device plus one `get_last_value` call per widget datapoint - all of
 /// which fired concurrently on every dashboard mount and were spiking DB CPU.
-async fn fetch_dashboard_data(state: &AppState) -> Result<serde_json::Value, AppError> {
+async fn fetch_dashboard_data(
+    state: &AppState,
+    app_handle: &AppHandle,
+) -> Result<serde_json::Value, AppError> {
     let path = state.settings_dir.join("dashboard.exalise.json");
     let dashboard = load_dashboard(&path);
     if !path.exists() {
@@ -509,10 +512,35 @@ async fn fetch_dashboard_data(state: &AppState) -> Result<serde_json::Value, App
             e
         })?;
 
+<<<<<<< Updated upstream
     let text = read_api_response(response).await.map_err(|e| {
         append_log(state, &format!("fetch_dashboard_data failed: {}", e));
+=======
+    let status = response.status();
+    append_log(state, &format!("fetch_dashboard_data: HTTP status {}", status));
+
+    let text = response.text().await.map_err(|e| {
+        append_log(state, &format!("fetch_dashboard_data response read failed: {}", e));
+>>>>>>> Stashed changes
         e
     })?;
+
+    append_log(state, &format!("fetch_dashboard_data: response body {} chars", text.len()));
+
+    // The API answers server-side failures with HTTP 200 and a bare string body
+    // (`"Error"` / `"UNAUTHENTICATED"`) rather than an error status, so without
+    // this an auth/DB problem would surface only as a confusing JSON parse error.
+    let trimmed = text.trim();
+    if trimmed == "Error" || trimmed == "UNAUTHENTICATED" || trimmed.is_empty() {
+        append_log(
+            state,
+            &format!("fetch_dashboard_data: server returned non-data body '{}' (status {})", trimmed, status),
+        );
+        return Err(AppError::Other(format!(
+            "getdashboarddata returned '{}' (status {})",
+            trimmed, status
+        )));
+    }
 
     let parsed: DashboardDataResponse = serde_json::from_str(&text).map_err(|e| {
         append_log(
@@ -522,14 +550,48 @@ async fn fetch_dashboard_data(state: &AppState) -> Result<serde_json::Value, App
         e
     })?;
 
+    let device_count = parsed.devices.as_object().map(|o| o.len()).unwrap_or(0);
     append_log(
         state,
         &format!(
             "fetch_dashboard_data: parsed {} values, {} devices",
             parsed.values.len(),
-            parsed.devices.as_object().map(|o| o.len()).unwrap_or(0)
+            device_count
         ),
     );
+
+    // Per-device datapoint counts make "widget stuck loading" diagnosable from
+    // the log alone: a widget referencing a datapoint the device shape doesn't
+    // define is the classic cause, and it shows up here as a low/zero count.
+    match parsed.devices.as_object() {
+        Some(obj) => {
+            for (id, shape) in obj {
+                let dp_count = shape
+                    .get("dataPoint")
+                    .and_then(|d| d.as_array())
+                    .map(|a| a.len())
+                    .unwrap_or(0);
+                let connected = shape.get("connected").and_then(|c| c.as_bool());
+                append_log(
+                    state,
+                    &format!(
+                        "fetch_dashboard_data: device {} -> {} datapoints, connected={:?}",
+                        id, dp_count, connected
+                    ),
+                );
+            }
+        }
+        None => {
+            append_log(state, "fetch_dashboard_data: WARNING devices payload is not a JSON object");
+        }
+    }
+
+    if parsed.values.is_empty() {
+        append_log(
+            state,
+            "fetch_dashboard_data: WARNING parsed 0 values - HTTP-only widgets (no live MQTT) will show 'No data'",
+        );
+    }
 
     for v in parsed.values {
         state.update_last_value(&v.id_key, &v.value).await;
@@ -538,43 +600,82 @@ async fn fetch_dashboard_data(state: &AppState) -> Result<serde_json::Value, App
     *state.device_data.write().await = Some(parsed.devices.clone());
 
     crate::services::cache_persist::flush_last_values(state).await;
+    crate::services::cache_persist::flush_device_data(state).await;
+
+    // Push the fresh snapshot to the frontend. The frontend also pulls once on
+    // mount, but that call can race this fetch (or hit the disk-fallback path);
+    // this event guarantees the UI hydrates the moment real data is available,
+    // including when a background retry finally succeeds minutes after launch.
+    emit_hydration(state, app_handle, &parsed.devices).await;
 
     Ok(parsed.devices)
 }
 
-/// Kicks off `fetch_dashboard_data` in the background at startup, so it's
-/// already cached by the time the dashboard mounts and calls `get_dashboard_data`.
-/// Takes `dashboard_fetch_lock` itself - the frontend's webview loads
-/// concurrently with this task (the splashscreen only hides the window, it
-/// doesn't block JS execution), so `EventManager`'s mount-time
-/// `get_dashboard_data` call routinely raced this one on a cold cache. Without
-/// sharing the lock, both sides independently called `fetch_dashboard_data`,
-/// firing two concurrent `POST /api/getdashboarddata` (and its 3 DB queries)
-/// on every single app launch instead of one.
-pub async fn prefetch_dashboard_data(state: &AppState) {
+/// Emits `dashboard-hydrated` to the main window with the current device shape
+/// plus a snapshot of the last-value cache, so the frontend can (re)hydrate
+/// from a push rather than depending solely on its own `get_dashboard_data`.
+async fn emit_hydration(state: &AppState, app_handle: &AppHandle, devices: &serde_json::Value) {
+    let values = state.last_values.read().await.clone();
+    let value_count = values.len();
+    let payload = DashboardDataOut {
+        devices: devices.clone(),
+        values,
+    };
+    match app_handle.get_window("main") {
+        Some(win) => match win.emit("dashboard-hydrated", &payload) {
+            Ok(_) => append_log(
+                state,
+                &format!("emit_hydration: pushed dashboard-hydrated ({} values)", value_count),
+            ),
+            Err(e) => append_log(state, &format!("emit_hydration: emit failed: {}", e)),
+        },
+        None => append_log(state, "emit_hydration: main window not found; push skipped"),
+    };
+}
+
+/// One prefetch attempt, guarded by `dashboard_fetch_lock` so it can't race a
+/// concurrent frontend `get_dashboard_data` into two duplicate POSTs. Returns
+/// whether device shape is now populated (i.e. whether a retry is still needed).
+/// The lock is released as soon as the attempt returns, so the retry loop's
+/// backoff sleep never blocks a waiting frontend caller.
+pub async fn prefetch_dashboard_data(state: &AppState, app_handle: &AppHandle) -> bool {
     let _guard = state.dashboard_fetch_lock.lock().await;
     if state.device_data.read().await.is_some() {
-        return;
+        return true;
     }
-    if let Err(e) = fetch_dashboard_data(state).await {
-        append_log(state, &format!("prefetch_dashboard_data failed: {}", e));
+    match fetch_dashboard_data(state, app_handle).await {
+        Ok(_) => true,
+        Err(e) => {
+            append_log(state, &format!("prefetch_dashboard_data attempt failed: {}", e));
+            false
+        }
     }
 }
 
 /// Returns cached device data (connected + datapoints) plus a snapshot of the
 /// last-value cache, fetching first if nothing is cached yet. Concurrent
-/// callers on a cold cache share one in-flight fetch instead of firing one
-/// each - this single call replaces both the old one-`get_device`-per-device
-/// fan-out and the one-`get_last_value`-per-widget fan-out.
+/// callers on a cold cache share one in-flight fetch instead of firing one each.
 ///
+<<<<<<< Updated upstream
 /// A failed fetch never propagates as an error here: `values` is already
 /// seeded from `last_values.cache.json` at startup (and kept current by
 /// MQTT), so one transient HTTP failure - e.g. network not up yet right
 /// after Windows-login autostart - must not blank the dashboard. Instead
 /// `devices` comes back as `null`, telling the frontend "keep what you have
 /// and retry later" (see `DashboardDataOut`).
+=======
+/// A failed fetch never propagates as an error here, so a transient HTTP failure
+/// (e.g. network not up yet right after Windows-login autostart) can't blank the
+/// dashboard. Instead it falls back to the last device shape persisted to disk
+/// (`device_data.cache.json`) so widget types still resolve, while `values` come
+/// from the disk-seeded, MQTT-updated `last_values`. The background retry loop
+/// then fetches fresh data and pushes it via `dashboard-hydrated`.
+>>>>>>> Stashed changes
 #[tauri::command(async)]
-pub async fn get_dashboard_data(state: State<'_, AppState>) -> Result<DashboardDataOut, AppError> {
+pub async fn get_dashboard_data(
+    state: State<'_, AppState>,
+    app_handle: AppHandle,
+) -> Result<DashboardDataOut, AppError> {
     let devices = if let Some(data) = state.device_data.read().await.clone() {
         Some(data)
     } else {
@@ -582,6 +683,7 @@ pub async fn get_dashboard_data(state: State<'_, AppState>) -> Result<DashboardD
         if let Some(data) = state.device_data.read().await.clone() {
             Some(data)
         } else {
+<<<<<<< Updated upstream
             match fetch_dashboard_data(&state).await {
                 Ok(data) => Some(data),
                 Err(e) => {
@@ -590,12 +692,46 @@ pub async fn get_dashboard_data(state: State<'_, AppState>) -> Result<DashboardD
                         &format!("get_dashboard_data: fetch failed, returning cached values with devices=null: {}", e),
                     );
                     None
+=======
+            match fetch_dashboard_data(&state, &app_handle).await {
+                Ok(data) => data,
+                Err(e) => {
+                    let disk = std::fs::read_to_string(
+                        crate::services::cache_persist::device_data_cache_path(&state),
+                    )
+                    .ok()
+                    .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
+                    match disk {
+                        Some(d) => {
+                            append_log(
+                                &state,
+                                &format!("get_dashboard_data: fetch failed ({}); using device shape from disk cache", e),
+                            );
+                            d
+                        }
+                        None => {
+                            append_log(
+                                &state,
+                                &format!("get_dashboard_data: fetch failed ({}) and no disk device cache; returning empty shape with cached values", e),
+                            );
+                            serde_json::json!({})
+                        }
+                    }
+>>>>>>> Stashed changes
                 }
             }
         }
     };
 
     let values = state.last_values.read().await.clone();
+    append_log(
+        &state,
+        &format!(
+            "get_dashboard_data: returning {} device shapes, {} values",
+            devices.as_object().map(|o| o.len()).unwrap_or(0),
+            values.len()
+        ),
+    );
 
     Ok(DashboardDataOut { devices, values })
 }

@@ -22,7 +22,7 @@ use tokio::time::Duration;
 use crate::commands::{
     dashboard::{compute_known_device_keys, get_dashboard, get_dashboard_data, prefetch_dashboard_data, save_dashboard_layout, save_device_to_dashboard, save_widget_to_dashboard},
     devices::{get_device, get_devices, get_last_value, get_own_device, post_remove_cache, test_exalise_connection},
-    misc::{close_splashscreen, get_debiteuren, get_end_answer, get_pdf_file, get_question, get_quiz, write_to_log_file},
+    misc::{append_log, close_splashscreen, get_debiteuren, get_end_answer, get_pdf_file, get_question, get_quiz, write_to_log_file},
     mqtt::{cancel_shutdown, get_exalise_connection, send_message},
     rs232::{get_all_availble_ports, start_file_receive, start_file_send, stop_file_receive, stop_file_send},
     settings::{
@@ -136,11 +136,31 @@ async fn main() {
         .setup(move |app| {
             let app_handle = app.handle();
 
-            // Pre-populate the device-data and last-value caches in the background.
+            // Pre-populate the device-data and last-value caches in the
+            // background, retrying with backoff until the first fetch succeeds.
+            // Cold-boot autostart on the factory floor routinely runs before the
+            // network/DNS is up; a single attempt that failed used to leave the
+            // dashboard with no device shape and (before the retry loop) nothing
+            // to recover it. Each success pushes `dashboard-hydrated` to the UI.
             let app_handle_init = app_handle.clone();
             tauri::async_runtime::spawn(async move {
                 let state = app_handle_init.state::<AppState>();
-                prefetch_dashboard_data(&state).await;
+                let mut attempt: u32 = 0;
+                loop {
+                    if prefetch_dashboard_data(&state, &app_handle_init).await {
+                        break;
+                    }
+                    attempt += 1;
+                    let delay = std::cmp::min(2u64.saturating_pow(attempt), 30);
+                    append_log(
+                        &state,
+                        &format!(
+                            "prefetch retry loop: attempt {} failed, retrying in {}s",
+                            attempt, delay
+                        ),
+                    );
+                    tokio::time::sleep(Duration::from_secs(delay)).await;
+                }
             });
 
             // Periodically persist the (MQTT-updated) in-memory cache to disk, so a

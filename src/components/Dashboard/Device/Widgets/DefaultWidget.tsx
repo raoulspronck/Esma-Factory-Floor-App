@@ -43,7 +43,11 @@ const DefaultWidget: React.FC<DefaultWidgetProps> = ({
 
   const rawValue = useDeviceValue(deviceKey, datapointKey);
   const time = useDeviceValueTimestamp(deviceKey, datapointKey);
-  const loading = type === undefined || rawValue === undefined;
+  // Loading depends only on whether we have a value. `type` is optional
+  // formatting metadata from the device shape; if it hasn't resolved yet we
+  // still show the raw value (formatNumberValue passes unknown types through)
+  // rather than hanging on "Loading..." forever.
+  const loading = rawValue === undefined;
   const value = {
     value: loading ? "" : formatNumberValue(rawValue, type),
     time: time ?? "",

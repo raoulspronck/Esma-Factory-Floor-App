@@ -37,21 +37,29 @@ const DisplayWidget: React.FC<DisplayWidgetProps> = ({
   const removeWidget = useDashboardStore((s) => s.removeWidget);
   const deleteWidget = () => removeWidget(deviceId, widget.id);
 
-  const [type, setType] = useState([]);
+  const [type, setType] = useState<(string | undefined)[]>([]);
 
+  // Resolve each datapoint's type from the device shape. Per-datapoint and
+  // non-throwing: a datapoint the device shape doesn't define (or a shape that
+  // hasn't loaded yet) yields `undefined` for THAT index only, instead of the
+  // old behaviour where one missing datapoint threw and abandoned every type
+  // for the widget - which left the whole widget stuck on "Loading..." even
+  // when its values were cached. Type is now only used for optional value
+  // formatting; it never gates whether a value is shown.
+  const datapointsKey = widget.datapoints.join("|");
   useEffect(() => {
-    try {
-      const types = [];
-      for (let index = 0; index < widget.datapoints.length; index++) {
-        const currentDatapointType = dataPoints.find(
-          (e) => e.key === widget.datapoints[index]
-        ).type;
-        types.push(currentDatapointType);
-      }
-
-      setType(types);
-    } catch (_error) {}
-  }, [dataPoints]);
+    const types = widget.datapoints.map((dpKey) => {
+      const found = dataPoints.find((e) => e && e.key === dpKey);
+      return found ? found.type : undefined;
+    });
+    setType((prev) =>
+      prev.length === types.length && prev.every((t, i) => t === types[i])
+        ? prev
+        : types
+    );
+    // datapointsKey is a stable stringified form of widget.datapoints.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataPoints, datapointsKey]);
 
   switch (widget.name.split("/")[0]) {
     case "Two Default":

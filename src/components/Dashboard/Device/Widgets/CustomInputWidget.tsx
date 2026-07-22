@@ -30,7 +30,9 @@ const CustomInputWidget: React.FC<CustomInputWidgetProps> = ({
 
   const rawValue = useDeviceValue(deviceKey, datapointKey);
   const time = useDeviceValueTimestamp(deviceKey, datapointKey);
-  const loading = types[0] === undefined || rawValue === undefined;
+  // Only the value gates loading; this widget doesn't use `types` for anything,
+  // so a device shape that hasn't resolved must not keep it on "Loading...".
+  const loading = rawValue === undefined;
   const value = {
     value: loading ? "" : rawValue,
     time: time ?? "",

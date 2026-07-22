@@ -33,7 +33,10 @@ interface TimerWidgetProps {
 const TimerWidget: React.FC<TimerWidgetProps> = ({ dataPoints, deviceKey }) => {
   const rawValue = useDeviceValue(deviceKey, dataPoints[0]);
   const time = useDeviceValueTimestamp(deviceKey, dataPoints[0]);
-  const loading = rawValue === undefined || time === undefined;
+  // Only the value gates loading. A missing timestamp just means the elapsed
+  // timer can't be baselined yet (it stays at 0 until a value with a time
+  // arrives) - it must not keep the whole widget on "Loading...".
+  const loading = rawValue === undefined;
   const value = rawValue ?? "";
 
   const [timer, setTimer] = useState(0);
