@@ -9,17 +9,29 @@ use crate::models::settings::{Debiteur, LoginData};
 use crate::services::http::read_api_response;
 use crate::state::AppState;
 
-pub fn append_log(state: &AppState, data: &str) -> bool {
-    let path = state.settings_dir.join("logs.txt");
-    let timestamp = Local::now().format("%d-%m-%Y %H:%M:%S");
-    let line = format!("{} - {}\n", timestamp, data);
-
+fn try_append(path: &std::path::Path, line: &str) -> bool {
     OpenOptions::new()
         .create(true)
         .append(true)
-        .open(&path)
+        .open(path)
         .and_then(|mut f| f.write_all(line.as_bytes()))
         .is_ok()
+}
+
+pub fn append_log(state: &AppState, data: &str) -> bool {
+    let timestamp = Local::now().format("%d-%m-%Y %H:%M:%S");
+    let line = format!("{} - {}\n", timestamp, data);
+
+    // Prefer the settings dir (where logs have always lived, alongside the
+    // deployment-managed config). If that write fails - e.g. a kiosk whose
+    // Windows user can't write the hardcoded settings path - fall back to the
+    // always-writable per-user app data dir. Without this, log lines silently
+    // vanished on those machines, which looked like "no errors in the logs"
+    // while nothing was actually being recorded.
+    if try_append(&state.settings_dir.join("logs.txt"), &line) {
+        return true;
+    }
+    try_append(&state.app_data_dir.join("logs.txt"), &line)
 }
 
 #[tauri::command(async)]

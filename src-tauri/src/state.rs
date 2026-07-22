@@ -38,8 +38,14 @@ pub struct AppState {
     /// Set to true when a shutdown countdown is in progress.
     /// Cleared by `cancel_shutdown` command; checked after the delay expires.
     pub shutdown_pending: Arc<AtomicBool>,
-    /// Resolved settings directory; injected once at startup.
+    /// Resolved settings directory; injected once at startup. Used for reading
+    /// deployment-managed config (dashboard/settings). May be read-only on a
+    /// locked-down kiosk - do not rely on it for runtime writes.
     pub settings_dir: PathBuf,
+    /// Per-user, always-writable directory for runtime files the app persists
+    /// itself: the last-value / device-shape caches and the log fallback. See
+    /// `config::paths::compute_app_data_dir`.
+    pub app_data_dir: PathBuf,
 }
 
 /// Groups all user configuration so it can be read/updated atomically.

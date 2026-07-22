@@ -31,7 +31,7 @@ use crate::commands::{
         save_exalise_mqtt_settings, save_rs232_settings,
     },
 };
-use crate::config::{load_or_default, paths::compute_settings_dir, save_json};
+use crate::config::{load_or_default, paths::{compute_app_data_dir, compute_settings_dir}, save_json};
 use crate::models::settings::{ApiSettings, BasicSettings, ExaliseSettings};
 use crate::services::{cache_persist, mqtt_service, rs232_service::start_rs232_monitor};
 use crate::state::{AppConfig, AppState};
@@ -44,15 +44,28 @@ async fn main() {
     let settings_dir = compute_settings_dir();
     std::fs::create_dir_all(&settings_dir).ok();
 
+    // Per-user, always-writable location for runtime files (caches + log
+    // fallback). The settings dir above is hardcoded to the `Gebruiker` user and
+    // is not writable on a kiosk running as a different Windows account, which
+    // made cache writes and log lines silently vanish there.
+    let app_data_dir = compute_app_data_dir();
+    std::fs::create_dir_all(&app_data_dir).ok();
+
     // Load all configuration with DRY generic loader.
     let exalise: ExaliseSettings = load_or_default(&settings_dir.join("settings.exalise.json"));
     let api: ApiSettings = load_or_default(&settings_dir.join("api.settings.json"));
     let basic: BasicSettings = load_or_default(&settings_dir.join("basic.settings.json"));
 
     // Seed the last-value cache from the previous session so the UI can paint
-    // immediately on window-open, before the fresh fetch in initialize_last_values completes.
-    let persisted_last_values: HashMap<String, String> =
-        load_or_default(&settings_dir.join("last_values.cache.json"));
+    // immediately on window-open, before the fresh fetch completes. The cache
+    // now lives in app_data_dir; on first launch after this change, migrate the
+    // previous cache from the old settings-dir location so nothing is lost.
+    let cache_path = app_data_dir.join("last_values.cache.json");
+    let persisted_last_values: HashMap<String, String> = if cache_path.exists() {
+        load_or_default(&cache_path)
+    } else {
+        load_or_default(&settings_dir.join("last_values.cache.json"))
+    };
 
     // Device keys this installation actually owns - used to keep retained MQTT
     // messages from unrelated devices on the broker out of last_values/the
@@ -121,6 +134,7 @@ async fn main() {
         mqtt_connected: mqtt_connected.clone(),
         shutdown_pending: Arc::new(AtomicBool::new(false)),
         settings_dir: settings_dir.clone(),
+        app_data_dir: app_data_dir.clone(),
     };
 
     tauri::Builder::default()

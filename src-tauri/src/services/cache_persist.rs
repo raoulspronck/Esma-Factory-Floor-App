@@ -8,7 +8,7 @@ const CACHE_FILE_NAME: &str = "last_values.cache.json";
 const DEVICE_DATA_CACHE_FILE_NAME: &str = "device_data.cache.json";
 
 pub fn cache_file_path(state: &AppState) -> std::path::PathBuf {
-    state.settings_dir.join(CACHE_FILE_NAME)
+    state.app_data_dir.join(CACHE_FILE_NAME)
 }
 
 /// Where the last successfully-fetched device shape (connected + datapoint
@@ -17,7 +17,7 @@ pub fn cache_file_path(state: &AppState) -> std::path::PathBuf {
 /// types at all - which left type-formatted widgets unable to resolve. Seeding
 /// this from disk lets the UI paint last-known shape immediately.
 pub fn device_data_cache_path(state: &AppState) -> std::path::PathBuf {
-    state.settings_dir.join(DEVICE_DATA_CACHE_FILE_NAME)
+    state.app_data_dir.join(DEVICE_DATA_CACHE_FILE_NAME)
 }
 
 /// Periodically snapshots the in-memory last-value cache to disk so a future restart
