@@ -1,8 +1,9 @@
 use chrono::prelude::*;
+use serde::Serialize;
 use serde_json::Value;
 use std::fs::OpenOptions;
 use std::io::Write;
-use tauri::{Manager, State};
+use tauri::{AppHandle, Manager, State};
 
 use crate::error::AppError;
 use crate::models::settings::{Debiteur, LoginData};
@@ -18,9 +19,25 @@ fn try_append(path: &std::path::Path, line: &str) -> bool {
         .is_ok()
 }
 
-pub fn append_log(state: &AppState, data: &str) -> bool {
-    let timestamp = Local::now().format("%d-%m-%Y %H:%M:%S");
-    let line = format!("{} - {}\n", timestamp, data);
+/// Payload for the `"app-log"` event — the single stream the frontend's "App
+/// Logs" viewer (both its live tab and its log-file tab) renders. Kept
+/// structured (rather than one opaque string) so the frontend can color-code
+/// by category instead of parsing free text.
+#[derive(Clone, Serialize)]
+pub struct LogEntry {
+    pub timestamp: String,
+    pub category: String,
+    pub message: String,
+}
+
+/// Writes one line to `logs.txt` and emits it live to the frontend, so the
+/// on-screen log and the file are always the same data - there is
+/// deliberately no other way to add a line to either. Callers pick a
+/// `category` ("system" | "dashboard" | "device" | "mqtt") so the UI can
+/// color-code entries without parsing message text.
+pub fn log_event(state: &AppState, app_handle: &AppHandle, category: &str, message: &str) -> bool {
+    let timestamp = Local::now().format("%d-%m-%Y %H:%M:%S").to_string();
+    let line = format!("{} - [{}] {}\n", timestamp, category, message);
 
     // Prefer the settings dir (where logs have always lived, alongside the
     // deployment-managed config). If that write fails - e.g. a kiosk whose
@@ -28,10 +45,33 @@ pub fn append_log(state: &AppState, data: &str) -> bool {
     // always-writable per-user app data dir. Without this, log lines silently
     // vanished on those machines, which looked like "no errors in the logs"
     // while nothing was actually being recorded.
-    if try_append(&state.settings_dir.join("logs.txt"), &line) {
-        return true;
-    }
-    try_append(&state.app_data_dir.join("logs.txt"), &line)
+    let written = if try_append(&state.settings_dir.join("logs.txt"), &line) {
+        true
+    } else {
+        try_append(&state.app_data_dir.join("logs.txt"), &line)
+    };
+
+    let _ = app_handle.emit_all(
+        "app-log",
+        LogEntry {
+            timestamp,
+            category: category.to_string(),
+            message: message.to_string(),
+        },
+    );
+
+    written
+}
+
+/// Reads the full contents of `logs.txt` (settings dir, falling back to the
+/// app-data dir), already bounded to the last 30 days by the periodic
+/// pruning in `services::log_retention`.
+#[tauri::command]
+pub fn read_log_file(state: State<'_, AppState>) -> Result<String, AppError> {
+    let content = std::fs::read_to_string(state.settings_dir.join("logs.txt"))
+        .or_else(|_| std::fs::read_to_string(state.app_data_dir.join("logs.txt")))
+        .unwrap_or_default();
+    Ok(content)
 }
 
 #[tauri::command(async)]
@@ -80,8 +120,8 @@ pub fn get_pdf_file() -> Result<String, AppError> {
 }
 
 #[tauri::command]
-pub fn write_to_log_file(data: String, state: State<'_, AppState>) -> bool {
-    append_log(&*state, &data)
+pub fn write_to_log_file(data: String, state: State<'_, AppState>, app_handle: AppHandle) -> bool {
+    log_event(&state, &app_handle, "system", &data)
 }
 
 // ── ESMA API (debiteuren) ──────────────────────────────────────────────────────

@@ -6,7 +6,7 @@ use tauri::{AppHandle, Manager, State};
 
 use crate::config::save_json;
 use crate::error::AppError;
-use crate::commands::misc::append_log;
+use crate::commands::misc::log_event;
 use crate::models::dashboard::{legacy, v2, Dashboard, Device, ValueResponse, Widget};
 use crate::services::http::read_api_response;
 use crate::state::AppState;
@@ -475,14 +475,16 @@ async fn fetch_dashboard_data(
     let path = state.settings_dir.join("dashboard.exalise.json");
     let dashboard = load_dashboard(&path);
     if !path.exists() {
-        append_log(state, "fetch_dashboard_data: dashboard.exalise.json not found or invalid");
+        log_event(state, app_handle, "dashboard", "fetch_dashboard_data: dashboard.exalise.json not found or invalid");
         let empty = serde_json::json!({});
         *state.device_data.write().await = Some(empty.clone());
         return Ok(empty);
     }
 
-    append_log(
+    log_event(
         state,
+        app_handle,
+        "dashboard",
         &format!(
             "fetch_dashboard_data: dashboard loaded with {} devices",
             dashboard.devices.len()
@@ -508,29 +510,31 @@ async fn fetch_dashboard_data(
         .send()
         .await
         .map_err(|e| {
-            append_log(state, &format!("fetch_dashboard_data HTTP request failed: {}", e));
+            log_event(state, app_handle, "dashboard", &format!("fetch_dashboard_data HTTP request failed: {}", e));
             e
         })?;
 
     let status = response.status();
-    append_log(state, &format!("fetch_dashboard_data: HTTP status {}", status));
+    log_event(state, app_handle, "dashboard", &format!("fetch_dashboard_data: HTTP status {}", status));
 
     // read_api_response turns any non-2xx into AppError::Api(status, body) so an
     // error body never reaches the JSON parser as if it were data.
     let text = read_api_response(response).await.map_err(|e| {
-        append_log(state, &format!("fetch_dashboard_data failed: {}", e));
+        log_event(state, app_handle, "dashboard", &format!("fetch_dashboard_data failed: {}", e));
         e
     })?;
 
-    append_log(state, &format!("fetch_dashboard_data: response body {} chars", text.len()));
+    log_event(state, app_handle, "dashboard", &format!("fetch_dashboard_data: response body {} chars", text.len()));
 
     // The API answers server-side failures with HTTP 200 and a bare string body
     // (`"Error"` / `"UNAUTHENTICATED"`) rather than an error status, so without
     // this an auth/DB problem would surface only as a confusing JSON parse error.
     let trimmed = text.trim();
     if trimmed == "Error" || trimmed == "UNAUTHENTICATED" || trimmed.is_empty() {
-        append_log(
+        log_event(
             state,
+            app_handle,
+            "dashboard",
             &format!("fetch_dashboard_data: server returned non-data body '{}' (status {})", trimmed, status),
         );
         return Err(AppError::Other(format!(
@@ -540,16 +544,20 @@ async fn fetch_dashboard_data(
     }
 
     let parsed: DashboardDataResponse = serde_json::from_str(&text).map_err(|e| {
-        append_log(
+        log_event(
             state,
+            app_handle,
+            "dashboard",
             &format!("fetch_dashboard_data JSON parse failed: {} / response: {}", e, text),
         );
         e
     })?;
 
     let device_count = parsed.devices.as_object().map(|o| o.len()).unwrap_or(0);
-    append_log(
+    log_event(
         state,
+        app_handle,
+        "dashboard",
         &format!(
             "fetch_dashboard_data: parsed {} values, {} devices",
             parsed.values.len(),
@@ -569,8 +577,10 @@ async fn fetch_dashboard_data(
                     .map(|a| a.len())
                     .unwrap_or(0);
                 let connected = shape.get("connected").and_then(|c| c.as_bool());
-                append_log(
+                log_event(
                     state,
+                    app_handle,
+                    "dashboard",
                     &format!(
                         "fetch_dashboard_data: device {} -> {} datapoints, connected={:?}",
                         id, dp_count, connected
@@ -579,13 +589,15 @@ async fn fetch_dashboard_data(
             }
         }
         None => {
-            append_log(state, "fetch_dashboard_data: WARNING devices payload is not a JSON object");
+            log_event(state, app_handle, "dashboard", "fetch_dashboard_data: WARNING devices payload is not a JSON object");
         }
     }
 
     if parsed.values.is_empty() {
-        append_log(
+        log_event(
             state,
+            app_handle,
+            "dashboard",
             "fetch_dashboard_data: WARNING parsed 0 values - HTTP-only widgets (no live MQTT) will show 'No data'",
         );
     }
@@ -620,13 +632,15 @@ async fn emit_hydration(state: &AppState, app_handle: &AppHandle, devices: &serd
     };
     match app_handle.get_window("main") {
         Some(win) => match win.emit("dashboard-hydrated", &payload) {
-            Ok(_) => append_log(
+            Ok(_) => log_event(
                 state,
+                app_handle,
+                "dashboard",
                 &format!("emit_hydration: pushed dashboard-hydrated ({} values)", value_count),
             ),
-            Err(e) => append_log(state, &format!("emit_hydration: emit failed: {}", e)),
+            Err(e) => log_event(state, app_handle, "dashboard", &format!("emit_hydration: emit failed: {}", e)),
         },
-        None => append_log(state, "emit_hydration: main window not found; push skipped"),
+        None => log_event(state, app_handle, "dashboard", "emit_hydration: main window not found; push skipped"),
     };
 }
 
@@ -643,7 +657,7 @@ pub async fn prefetch_dashboard_data(state: &AppState, app_handle: &AppHandle) -
     match fetch_dashboard_data(state, app_handle).await {
         Ok(_) => true,
         Err(e) => {
-            append_log(state, &format!("prefetch_dashboard_data attempt failed: {}", e));
+            log_event(state, app_handle, "dashboard", &format!("prefetch_dashboard_data attempt failed: {}", e));
             false
         }
     }
@@ -688,15 +702,19 @@ pub async fn get_dashboard_data(
                     .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
                     match disk {
                         Some(d) => {
-                            append_log(
+                            log_event(
                                 &state,
+                                &app_handle,
+                                "dashboard",
                                 &format!("get_dashboard_data: fetch failed ({}); using device shape from disk cache", e),
                             );
                             Some(d)
                         }
                         None => {
-                            append_log(
+                            log_event(
                                 &state,
+                                &app_handle,
+                                "dashboard",
                                 &format!("get_dashboard_data: fetch failed ({}) and no disk device cache; returning devices=null", e),
                             );
                             None
@@ -708,8 +726,10 @@ pub async fn get_dashboard_data(
     };
 
     let values = state.last_values.read().await.clone();
-    append_log(
+    log_event(
         &state,
+        &app_handle,
+        "dashboard",
         &format!(
             "get_dashboard_data: returning {} device shapes, {} values",
             devices.as_ref().and_then(|d| d.as_object()).map(|o| o.len()).unwrap_or(0),

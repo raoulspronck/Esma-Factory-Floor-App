@@ -1,7 +1,7 @@
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, State};
 
-use crate::commands::misc::append_log;
+use crate::commands::misc::log_event;
 use crate::error::AppError;
 use crate::services::http::read_api_response;
 use crate::state::AppState;
@@ -24,6 +24,7 @@ pub struct ConnectionTestResult {
 #[tauri::command(async)]
 pub async fn test_exalise_connection(
     state: State<'_, AppState>,
+    app_handle: AppHandle,
 ) -> Result<ConnectionTestResult, AppError> {
     let (http_key, http_secret, device_key) = {
         let config = state.config.read().await;
@@ -34,8 +35,10 @@ pub async fn test_exalise_connection(
         )
     };
 
-    append_log(
+    log_event(
         &state,
+        &app_handle,
+        "device",
         &format!(
             "test_exalise_connection: testing with api_key='{}', device_key='{}'",
             http_key, device_key
@@ -54,8 +57,10 @@ pub async fn test_exalise_connection(
     let response = match response {
         Ok(resp) => resp,
         Err(e) => {
-            append_log(
+            log_event(
                 &state,
+                &app_handle,
+                "device",
                 &format!("test_exalise_connection request failed: {}", e),
             );
             return Ok(ConnectionTestResult {
@@ -87,8 +92,10 @@ pub async fn test_exalise_connection(
         text
     };
 
-    append_log(
+    log_event(
         &state,
+        &app_handle,
+        "device",
         &format!(
             "test_exalise_connection result: status={} success={} message={}",
             status_code, success, message
@@ -105,7 +112,7 @@ pub async fn test_exalise_connection(
 }
 
 #[tauri::command(async)]
-pub async fn get_devices(state: State<'_, AppState>) -> Result<String, AppError> {
+pub async fn get_devices(state: State<'_, AppState>, app_handle: AppHandle) -> Result<String, AppError> {
     let config = state.config.read().await;
     let response = state
         .http_client
@@ -119,13 +126,13 @@ pub async fn get_devices(state: State<'_, AppState>) -> Result<String, AppError>
     let response = match response {
         Ok(resp) => resp,
         Err(e) => {
-            append_log(&state, &format!("get_devices HTTP request failed: {}", e));
+            log_event(&state, &app_handle, "device", &format!("get_devices HTTP request failed: {}", e));
             return Err(AppError::Http(e));
         }
     };
 
     read_api_response(response).await.map_err(|e| {
-        append_log(&state, &format!("get_devices failed: {}", e));
+        log_event(&state, &app_handle, "device", &format!("get_devices failed: {}", e));
         e
     })
 }
@@ -134,6 +141,7 @@ pub async fn get_devices(state: State<'_, AppState>) -> Result<String, AppError>
 pub async fn get_device(
     device_id: String,
     state: State<'_, AppState>,
+    app_handle: AppHandle,
 ) -> Result<String, AppError> {
     let config = state.config.read().await;
     let response = state
@@ -148,19 +156,19 @@ pub async fn get_device(
     let response = match response {
         Ok(resp) => resp,
         Err(e) => {
-            append_log(&state, &format!("get_device HTTP request failed for {}: {}", device_id, e));
+            log_event(&state, &app_handle, "device", &format!("get_device HTTP request failed for {}: {}", device_id, e));
             return Err(AppError::Http(e));
         }
     };
 
     read_api_response(response).await.map_err(|e| {
-        append_log(&state, &format!("get_device failed for {}: {}", device_id, e));
+        log_event(&state, &app_handle, "device", &format!("get_device failed for {}: {}", device_id, e));
         e
     })
 }
 
 #[tauri::command(async)]
-pub async fn get_own_device(state: State<'_, AppState>) -> Result<String, AppError> {
+pub async fn get_own_device(state: State<'_, AppState>, app_handle: AppHandle) -> Result<String, AppError> {
     let config = state.config.read().await;
     let response = state
         .http_client
@@ -174,13 +182,13 @@ pub async fn get_own_device(state: State<'_, AppState>) -> Result<String, AppErr
     let response = match response {
         Ok(resp) => resp,
         Err(e) => {
-            append_log(&state, &format!("get_own_device HTTP request failed: {}", e));
+            log_event(&state, &app_handle, "device", &format!("get_own_device HTTP request failed: {}", e));
             return Err(AppError::Http(e));
         }
     };
 
     read_api_response(response).await.map_err(|e| {
-        append_log(&state, &format!("get_own_device failed: {}", e));
+        log_event(&state, &app_handle, "device", &format!("get_own_device failed: {}", e));
         e
     })
 }
@@ -191,13 +199,16 @@ pub async fn get_last_value(
     device_key: String,
     datapoint_key: String,
     state: State<'_, AppState>,
+    app_handle: AppHandle,
 ) -> Result<String, AppError> {
     let cache_key = format!("{}---{}", device_key, datapoint_key);
 
     // Return cached value if available.
     if let Some(v) = state.get_last_value(&cache_key).await {
-        append_log(
+        log_event(
             &state,
+            &app_handle,
+            "device",
             &format!(
                 "get_last_value cache hit: key='{}' value='{}'",
                 cache_key, v
@@ -206,8 +217,10 @@ pub async fn get_last_value(
         return Ok(v);
     }
 
-    append_log(
+    log_event(
         &state,
+        &app_handle,
+        "device",
         &format!(
             "get_last_value cache miss: key='{}', fetching from API for device_id='{}'",
             cache_key, device_id
@@ -228,8 +241,10 @@ pub async fn get_last_value(
     let response = match response {
         Ok(resp) => resp,
         Err(e) => {
-            append_log(
+            log_event(
                 &state,
+                &app_handle,
+                "device",
                 &format!(
                     "get_last_value HTTP request failed for {}/{}: {}",
                     device_id, datapoint_key, e
@@ -242,8 +257,10 @@ pub async fn get_last_value(
     let value = match read_api_response(response).await {
         Ok(text) => text,
         Err(e) => {
-            append_log(
+            log_event(
                 &state,
+                &app_handle,
+                "device",
                 &format!(
                     "get_last_value failed for {}/{}: {}",
                     device_id, datapoint_key, e
@@ -253,8 +270,10 @@ pub async fn get_last_value(
         }
     };
 
-    append_log(
+    log_event(
         &state,
+        &app_handle,
+        "device",
         &format!(
             "get_last_value API response: key='{}' value='{}'",
             cache_key, value
