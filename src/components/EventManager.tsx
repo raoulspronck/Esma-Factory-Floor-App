@@ -4,7 +4,12 @@ import { invoke } from "@tauri-apps/api";
 
 import { useConnectionStore, DeviceData } from "../stores/connectionStore";
 import { useDashboardStore } from "../stores/dashboardStore";
-import { getDashboardData, DashboardDataResult } from "../api/dashboard";
+import {
+  getDashboardData,
+  requestDashboardRefresh,
+  signalFrontendReady,
+  DashboardDataResult,
+} from "../api/dashboard";
 import { emitter } from "../index";
 
 /**
@@ -141,27 +146,39 @@ export default function EventManager(): null {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrationSignature]);
 
+  // Hydration runs ONCE, on mount, and is deliberately NOT keyed on
+  // `hydrationSignature`.
+  //
+  // It used to be. That meant the effect tore itself down and re-ran the moment
+  // `loadDashboard()` resolved (devices go []  ->  real list), so the first pull's
+  // result was discarded via `cancelled` and a second identical call was queued
+  // behind it. Combined with the backend doing its HTTP fetch inline behind a
+  // shared mutex, that doubled the window in which the UI had no values at all.
+  //
+  // Nothing here needs the dashboard shape: value keys come from the payload
+  // (`deviceKey---datapoint`), not from the widget list, so hydrating early is
+  // free and always correct. Widgets that mount later just read the store.
   useEffect(() => {
     let cancelled = false;
-    let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
-    // Hydrate the stores from a (devices, values) snapshot - used by both the
-    // pull path (get_dashboard_data) and the backend push (dashboard-hydrated).
-    // Display is driven by `values` (disk-seeded + MQTT-updated), so an empty
-    // `devices` shape never blanks a widget that already has a cached value.
+    // Hydrate the stores from a (devices, values) snapshot - used by the initial
+    // cache read, the `frontend_ready` handshake, and the `dashboard-hydrated`
+    // push. Display is driven by `values` (disk-seeded + MQTT-updated), so an
+    // empty `devices` shape never blanks a widget that already has a value.
     const applyDashboardData = (
-      devices: Record<string, DeviceData> | undefined,
-      values: Record<string, string> | undefined
+      devices: Record<string, DeviceData> | null | undefined,
+      values: Record<string, string> | undefined,
+      source: string
     ) => {
       if (cancelled) return;
       const deviceCount = devices ? Object.keys(devices).length : 0;
       const valueEntries = values ? Object.entries(values) : [];
       console.log(
-        `[hydrate] applying ${deviceCount} device shapes, ${valueEntries.length} values`
+        `[hydrate] ${source}: applying ${deviceCount} device shapes, ${valueEntries.length} values`
       );
 
       // Only overwrite device shape when we actually have one, so a transient
-      // empty fetch can't wipe a good shape that a previous fetch/push set.
+      // empty snapshot can't wipe a good shape that a previous pass set.
       if (devices && deviceCount > 0) setDeviceData(devices);
 
       // Most entries are the JSON-wrapped shape the HTTP fetch returns
@@ -192,76 +209,64 @@ export default function EventManager(): null {
       setLastValueTimestamps(timestamps);
     };
 
-    const fetchDashboardData = (attempt = 0) => {
-      if (retryTimer !== undefined) {
-        clearTimeout(retryTimer);
-        retryTimer = undefined;
-      }
-
-      getDashboardData()
-        .then(({ devices, values }) => {
-          if (cancelled) return;
-          applyDashboardData(devices, values);
-
-          // `devices === null` (or an empty shape) means the backend fetch
-          // hasn't succeeded yet - it failed with no disk cache (cold boot,
-          // network not up). `applyDashboardData` already preserved any shape
-          // we had; keep retrying so `connected` status and datapoint types
-          // eventually resolve. The backend's own retry loop also pushes
-          // `dashboard-hydrated` once it succeeds. Cached values are shown
-          // regardless.
-          const deviceCount = devices ? Object.keys(devices).length : 0;
-          if (deviceCount === 0) {
-            const delay = Math.min(2000 * 2 ** attempt, 30000);
-            console.warn(
-              `[hydrate] no device shape yet (attempt ${attempt}); retrying in ${delay}ms`
-            );
-            retryTimer = setTimeout(() => fetchDashboardData(attempt + 1), delay);
-          }
-        })
-        .catch((err) => {
-          console.error("[hydrate] get_dashboard_data failed:", err);
-          if (cancelled) return;
-          // Transient failures right after launch (network not up yet post
-          // Windows-login autostart) - back off and retry instead of leaving the
-          // dashboard blank until someone clicks "Refetch".
-          const delay = Math.min(2000 * 2 ** attempt, 30000);
-          retryTimer = setTimeout(() => fetchDashboardData(attempt + 1), delay);
-        });
-    };
-
-    // Initial pull - one call instead of one `get_device` per device plus one
-    // `get_last_value` per widget datapoint. Re-runs whenever the device/
-    // datapoint set changes (hydrationSignature), since the backend invalidates
-    // its cache on those saves and this refetch brings in the new shape/values.
-    fetchDashboardData();
-
-    // Backend push: fires whenever a fresh fetch succeeds (startup prefetch, the
-    // background retry loop, or a command-triggered fetch). Primary safety net
-    // against the UI staying stuck on stale/empty data - e.g. when the network
-    // only comes up minutes after autostart.
+    // Register the push listener BEFORE announcing readiness, so the snapshot
+    // that `frontend_ready` triggers can't arrive before we're listening.
     const hydratedUnlisten = listen<DashboardDataResult>("dashboard-hydrated", (e) => {
       if (cancelled || !e.payload) return;
-      console.log("[hydrate] received dashboard-hydrated push");
-      applyDashboardData(e.payload.devices, e.payload.values);
-      if (retryTimer !== undefined) {
-        clearTimeout(retryTimer);
-        retryTimer = undefined;
-      }
+      applyDashboardData(e.payload.devices, e.payload.values, "push");
     });
 
-    // The taskbar's "Refetch" button clears the backend cache then emits this;
-    // re-running the same fetch repopulates both stores from fresh data.
-    const onRefetch = () => fetchDashboardData();
+    // Read the cache immediately. This is a pure memory read on the Rust side
+    // (no HTTP, no lock), so it resolves in milliseconds regardless of the
+    // network - widgets paint last-known-good readings essentially at once even
+    // on a cold boot with the wifi still down.
+    getDashboardData()
+      .then(({ devices, values, fresh }) =>
+        applyDashboardData(devices, values, `cache read (fresh=${fresh})`)
+      )
+      .catch((err) => console.error("[hydrate] get_dashboard_data failed:", err));
+
+    // Then tell the backend we're listening. It replies with the same snapshot
+    // AND re-emits `dashboard-hydrated`, so any push it made while the webview
+    // was still loading (Tauri drops those silently) is recovered rather than
+    // lost forever.
+    hydratedUnlisten
+      .then(() => signalFrontendReady())
+      .then(({ devices, values }) => applyDashboardData(devices, values, "frontend_ready"))
+      .catch((err) => console.error("[hydrate] frontend_ready failed:", err));
+
+    // The taskbar's "Refetch" button. Ask the background refresher to go now;
+    // the result comes back as a push. No fetch is ever awaited on this path.
+    const onRefetch = () => {
+      requestDashboardRefresh().catch((err) =>
+        console.error("[hydrate] refresh request failed:", err)
+      );
+      getDashboardData()
+        .then(({ devices, values }) => applyDashboardData(devices, values, "refetch"))
+        .catch((err) => console.error("[hydrate] refetch cache read failed:", err));
+    };
     emitter.on("refetch", onRefetch);
+
     return () => {
       cancelled = true;
-      if (retryTimer !== undefined) clearTimeout(retryTimer);
       hydratedUnlisten.then((fn) => fn());
       emitter.off("refetch", onRefetch);
     };
+    // Mount-only: the setters are stable Zustand actions.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrationSignature, setDeviceData, setLastValues, setLastValueTimestamps]);
+  }, []);
+
+  // Adding/removing a device or widget changes which datapoints matter, so ask
+  // the backend to refresh its shape. Fire-and-forget - the existing cache stays
+  // on screen until the new snapshot is pushed. Skipped while the dashboard is
+  // still empty (pre-`loadDashboard`), which would otherwise fire a pointless
+  // refresh on every launch.
+  useEffect(() => {
+    if (dashboard.devices.length === 0) return;
+    requestDashboardRefresh().catch((err) =>
+      console.error("[hydrate] refresh request failed:", err)
+    );
+  }, [hydrationSignature, dashboard.devices.length]);
 
   return null;
 }

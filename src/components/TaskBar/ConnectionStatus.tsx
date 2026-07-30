@@ -11,7 +11,6 @@ import {
   Portal,
   Text,
 } from "@chakra-ui/react";
-import { invoke } from "@tauri-apps/api";
 import { listen } from "@tauri-apps/api/event";
 import { relaunch } from "@tauri-apps/api/process";
 import { useEffect, useState } from "react";
@@ -74,8 +73,12 @@ export default function ConnectionStatus() {
                     <Button
                       leftIcon={<TfiReload />}
                       colorScheme="blue"
-                      onClick={async () => {
-                        await invoke("post_remove_cache");
+                      // Requests a fresh fetch without clearing the cache first.
+                      // Clearing it (what this used to do) blanked every widget
+                      // to "Loading..." and left them there for as long as the
+                      // network took to answer - the exact failure this button
+                      // gets pressed to escape.
+                      onClick={() => {
                         emitter.emit("refetch", true);
                         onClose();
                       }}

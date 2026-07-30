@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
+use std::sync::atomic::Ordering;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
@@ -17,6 +18,10 @@ use crate::state::AppState;
 const STRIP_COLS: i32 = 2;
 const STRIP_ROWS: i32 = 7;
 pub const MAX_DEVICES: usize = 5;
+
+/// Per-attempt timeout for `/api/getdashboarddata`. Only the background
+/// refresher makes this call, so a timeout costs a retry, never a blank UI.
+const FETCH_TIMEOUT_SECS: u64 = 12;
 
 /// Reads `dashboard.exalise.json`, transparently migrating older formats:
 /// v3 (per-device strips, `version` marker) is parsed natively; v2 (flat
@@ -395,15 +400,22 @@ struct DashboardDataResponse {
 /// a full snapshot of the last-value cache, so the UI can hydrate in one call
 /// instead of each widget separately calling `get_last_value`.
 ///
-/// `devices` is `None` (JSON `null`) when the upstream fetch failed and no
-/// cached snapshot exists - distinct from `{}` (a genuinely empty dashboard).
-/// The frontend keeps its current device shapes and retries on `null`; the
-/// old behavior of returning `{}` on failure silently wiped every widget's
-/// datapoint definitions and defeated the frontend's retry logic.
-#[derive(Serialize)]
+/// `devices` is `None` (JSON `null`) when no shape has ever been cached, on disk
+/// or in memory - distinct from `{}` (a genuinely empty dashboard). The frontend
+/// keeps its current device shapes on `null`; the old behavior of returning `{}`
+/// silently wiped every widget's datapoint definitions.
+///
+/// `values` is ALWAYS a full snapshot of `last_values`, which is seeded from disk
+/// before the window even opens. It is what widgets render, and it is never
+/// gated on the network - see `get_dashboard_data`.
+#[derive(Serialize, Clone)]
 pub struct DashboardDataOut {
     devices: Option<serde_json::Value>,
     values: HashMap<String, String>,
+    /// Whether a live fetch has landed this session. `false` means the payload is
+    /// last-known-good from disk; the UI still renders it, this is only for
+    /// diagnostics and the connection indicator.
+    fresh: bool,
 }
 
 #[tauri::command(async)]
@@ -431,10 +443,11 @@ pub async fn save_device_to_dashboard(
 
     save_json(&path, &dashboard)?;
     refresh_known_device_keys(&dashboard, &state).await;
-    // The cached device_data snapshot predates this device - drop it so the
-    // next get_dashboard_data fetches the new device's shape/datapoints
-    // instead of serving a stale cache that doesn't know the device exists.
-    *state.device_data.write().await = None;
+    // The cached shape predates this device, so ask for a refresh - but keep the
+    // existing shape in place meanwhile. Nulling it (what this used to do) blanked
+    // every *other* device's datapoint types until the next fetch landed, which on
+    // a bad connection could be minutes.
+    state.request_refresh();
     Ok(dashboard)
 }
 
@@ -446,9 +459,9 @@ pub async fn save_widget_to_dashboard(
     let path = state.settings_dir.join("dashboard.exalise.json");
     save_json(&path, &dashboard)?;
     refresh_known_device_keys(&dashboard, &state).await;
-    // A new widget may reference datapoints whose latest value isn't cached
-    // yet - invalidate so the next get_dashboard_data fetches them.
-    *state.device_data.write().await = None;
+    // A new widget may reference datapoints whose latest value isn't cached yet -
+    // request a refresh, keeping the current shape/values visible until it lands.
+    state.request_refresh();
     Ok(dashboard)
 }
 
@@ -468,26 +481,34 @@ pub async fn save_dashboard_layout(
 /// populates both in-memory caches. Replaces what used to be one `get_device`
 /// call per device plus one `get_last_value` call per widget datapoint - all of
 /// which fired concurrently on every dashboard mount and were spiking DB CPU.
+/// `verbose` turns on the per-attempt diagnostic breakdown. Callers pass true
+/// while data is not yet known-good (startup, or after a failure), and false for
+/// routine refreshes of an already-healthy dashboard - the refresher runs for the
+/// life of the app, so unconditional verbosity would grow logs.txt by megabytes a
+/// day on a kiosk that stays up for weeks.
 async fn fetch_dashboard_data(
     state: &AppState,
-    app_handle: &AppHandle,
+    verbose: bool,
 ) -> Result<serde_json::Value, AppError> {
     let path = state.settings_dir.join("dashboard.exalise.json");
     let dashboard = load_dashboard(&path);
     if !path.exists() {
+        // Nothing to fetch for, but don't overwrite a cached shape with `{}` - a
+        // settings dir that momentarily can't be read (locked-down kiosk user,
+        // network share not mounted yet) must not wipe the last known good shape.
         append_log(state, "fetch_dashboard_data: dashboard.exalise.json not found or invalid");
-        let empty = serde_json::json!({});
-        *state.device_data.write().await = Some(empty.clone());
-        return Ok(empty);
+        return Ok(serde_json::json!({}));
     }
 
-    append_log(
-        state,
-        &format!(
-            "fetch_dashboard_data: dashboard loaded with {} devices",
-            dashboard.devices.len()
-        ),
-    );
+    if verbose {
+        append_log(
+            state,
+            &format!(
+                "fetch_dashboard_data: dashboard loaded with {} devices",
+                dashboard.devices.len()
+            ),
+        );
+    }
 
     let (http_key, http_secret, device_key) = {
         let config = state.config.read().await;
@@ -504,6 +525,11 @@ async fn fetch_dashboard_data(
         .header("x-api-key", &http_key)
         .header("x-api-secret", &http_secret)
         .header("x-master-device-key", &device_key)
+        // Tighter than the client-wide 20s: this call now only ever runs on the
+        // background refresher, which would rather fail fast and retry than sit
+        // on a half-open socket for 20s on flaky shop-floor wifi. Nothing in the
+        // UI waits on it.
+        .timeout(std::time::Duration::from_secs(FETCH_TIMEOUT_SECS))
         .json(&dashboard.devices)
         .send()
         .await
@@ -513,7 +539,9 @@ async fn fetch_dashboard_data(
         })?;
 
     let status = response.status();
-    append_log(state, &format!("fetch_dashboard_data: HTTP status {}", status));
+    if verbose {
+        append_log(state, &format!("fetch_dashboard_data: HTTP status {}", status));
+    }
 
     // read_api_response turns any non-2xx into AppError::Api(status, body) so an
     // error body never reaches the JSON parser as if it were data.
@@ -522,7 +550,9 @@ async fn fetch_dashboard_data(
         e
     })?;
 
-    append_log(state, &format!("fetch_dashboard_data: response body {} chars", text.len()));
+    if verbose {
+        append_log(state, &format!("fetch_dashboard_data: response body {} chars", text.len()));
+    }
 
     // The API answers server-side failures with HTTP 200 and a bare string body
     // (`"Error"` / `"UNAUTHENTICATED"`) rather than an error status, so without
@@ -560,26 +590,31 @@ async fn fetch_dashboard_data(
     // Per-device datapoint counts make "widget stuck loading" diagnosable from
     // the log alone: a widget referencing a datapoint the device shape doesn't
     // define is the classic cause, and it shows up here as a low/zero count.
-    match parsed.devices.as_object() {
-        Some(obj) => {
-            for (id, shape) in obj {
-                let dp_count = shape
-                    .get("dataPoint")
-                    .and_then(|d| d.as_array())
-                    .map(|a| a.len())
-                    .unwrap_or(0);
-                let connected = shape.get("connected").and_then(|c| c.as_bool());
-                append_log(
-                    state,
-                    &format!(
-                        "fetch_dashboard_data: device {} -> {} datapoints, connected={:?}",
-                        id, dp_count, connected
-                    ),
-                );
+    // Only on the diagnostically interesting attempts (startup, or the first
+    // success after a failure) - the refresher now runs for the life of the app,
+    // and emitting this block every few minutes forever would bury the log.
+    if verbose {
+        match parsed.devices.as_object() {
+            Some(obj) => {
+                for (id, shape) in obj {
+                    let dp_count = shape
+                        .get("dataPoint")
+                        .and_then(|d| d.as_array())
+                        .map(|a| a.len())
+                        .unwrap_or(0);
+                    let connected = shape.get("connected").and_then(|c| c.as_bool());
+                    append_log(
+                        state,
+                        &format!(
+                            "fetch_dashboard_data: device {} -> {} datapoints, connected={:?}",
+                            id, dp_count, connected
+                        ),
+                    );
+                }
             }
-        }
-        None => {
-            append_log(state, "fetch_dashboard_data: WARNING devices payload is not a JSON object");
+            None => {
+                append_log(state, "fetch_dashboard_data: WARNING devices payload is not a JSON object");
+            }
         }
     }
 
@@ -595,34 +630,62 @@ async fn fetch_dashboard_data(
     }
 
     *state.device_data.write().await = Some(parsed.devices.clone());
+    state.dashboard_data_fresh.store(true, Ordering::Relaxed);
 
     crate::services::cache_persist::flush_last_values(state).await;
     crate::services::cache_persist::flush_device_data(state).await;
 
-    // Push the fresh snapshot to the frontend. The frontend also pulls once on
-    // mount, but that call can race this fetch (or hit the disk-fallback path);
-    // this event guarantees the UI hydrates the moment real data is available,
-    // including when a background retry finally succeeds minutes after launch.
-    emit_hydration(state, app_handle, &parsed.devices).await;
-
     Ok(parsed.devices)
 }
 
-/// Emits `dashboard-hydrated` to the main window with the current device shape
-/// plus a snapshot of the last-value cache, so the frontend can (re)hydrate
-/// from a push rather than depending solely on its own `get_dashboard_data`.
-async fn emit_hydration(state: &AppState, app_handle: &AppHandle, devices: &serde_json::Value) {
-    let values = state.last_values.read().await.clone();
-    let value_count = values.len();
-    let payload = DashboardDataOut {
-        devices: Some(devices.clone()),
-        values,
-    };
+/// Builds the hydration payload from whatever is currently cached. Pure memory
+/// read: no network, no `dashboard_fetch_lock`, so it can never block or fail.
+/// `values` is seeded from disk before the window opens, which is what lets the
+/// UI paint last-known-good readings on a cold boot with the network still down.
+async fn cached_snapshot(state: &AppState) -> DashboardDataOut {
+    DashboardDataOut {
+        devices: state.device_data.read().await.clone(),
+        values: state.last_values.read().await.clone(),
+        fresh: state.dashboard_data_fresh.load(Ordering::Relaxed),
+    }
+}
+
+/// Emits `dashboard-hydrated` to the main window with the currently cached shape
+/// and values.
+///
+/// Called after EVERY refresh attempt, success or failure - not just on success.
+/// A failed attempt still has a payload worth pushing (the disk seed), and on a
+/// shop floor whose wifi is down at boot, "only push on success" meant no push
+/// ever arrived and the UI sat on "Loading..." with the data already in RAM.
+///
+/// `frontend_ready` is honoured because Tauri silently drops an event emitted at
+/// a window whose page hasn't registered its listeners yet. The startup refresh
+/// can easily win that race, and the old code logged such a lost push as
+/// "pushed" - which is why the logs claimed the data had been delivered while
+/// the widgets disagreed.
+async fn emit_hydration(state: &AppState, app_handle: &AppHandle) {
+    if !state.is_frontend_ready() {
+        append_log(
+            state,
+            "emit_hydration: frontend not ready yet; skipping push (it will pull on frontend_ready)",
+        );
+        return;
+    }
+
+    let payload = cached_snapshot(state).await;
+    let (device_count, value_count) = (
+        payload.devices.as_ref().and_then(|d| d.as_object()).map(|o| o.len()).unwrap_or(0),
+        payload.values.len(),
+    );
+
     match app_handle.get_window("main") {
         Some(win) => match win.emit("dashboard-hydrated", &payload) {
             Ok(_) => append_log(
                 state,
-                &format!("emit_hydration: pushed dashboard-hydrated ({} values)", value_count),
+                &format!(
+                    "emit_hydration: pushed dashboard-hydrated ({} device shapes, {} values, fresh={})",
+                    device_count, value_count, payload.fresh
+                ),
             ),
             Err(e) => append_log(state, &format!("emit_hydration: emit failed: {}", e)),
         },
@@ -630,92 +693,87 @@ async fn emit_hydration(state: &AppState, app_handle: &AppHandle, devices: &serd
     };
 }
 
-/// One prefetch attempt, guarded by `dashboard_fetch_lock` so it can't race a
-/// concurrent frontend `get_dashboard_data` into two duplicate POSTs. Returns
-/// whether device shape is now populated (i.e. whether a retry is still needed).
-/// The lock is released as soon as the attempt returns, so the retry loop's
-/// backoff sleep never blocks a waiting frontend caller.
-pub async fn prefetch_dashboard_data(state: &AppState, app_handle: &AppHandle) -> bool {
-    let _guard = state.dashboard_fetch_lock.lock().await;
-    if state.device_data.read().await.is_some() {
-        return true;
-    }
-    match fetch_dashboard_data(state, app_handle).await {
-        Ok(_) => true,
-        Err(e) => {
-            append_log(state, &format!("prefetch_dashboard_data attempt failed: {}", e));
-            false
-        }
-    }
-}
-
-/// Returns cached device data (connected + datapoints) plus a snapshot of the
-/// last-value cache, fetching first if nothing is cached yet. Concurrent
-/// callers on a cold cache share one in-flight fetch instead of firing one each.
+/// One refresh attempt, then a push of whatever we now hold. Serialized on
+/// `dashboard_fetch_lock` so overlapping refresh requests collapse into one POST.
+/// Returns whether the fetch itself succeeded.
 ///
-/// A failed fetch never propagates as an error here, so a transient HTTP failure
-/// (e.g. network not up yet right after Windows-login autostart) can't blank the
-/// dashboard. It first falls back to the last device shape persisted to disk
-/// (`device_data.cache.json`) so widget types still resolve on a cold start; if
-/// there's no disk cache either, `devices` comes back as `null`, telling the
-/// frontend to keep what it has and retry later (see `DashboardDataOut`). Either
-/// way `values` come from the disk-seeded, MQTT-updated `last_values`, and the
-/// background retry loop fetches fresh data and pushes it via `dashboard-hydrated`.
-#[tauri::command(async)]
-pub async fn get_dashboard_data(
-    state: State<'_, AppState>,
-    app_handle: AppHandle,
-) -> Result<DashboardDataOut, AppError> {
-    let devices = if let Some(data) = state.device_data.read().await.clone() {
-        Some(data)
-    } else {
+/// Note there is no `device_data.is_some()` early-out any more: shape is seeded
+/// from disk at startup, so that check used to make the refresher declare victory
+/// without ever talking to the server.
+pub async fn refresh_dashboard_data(state: &AppState, app_handle: &AppHandle) -> bool {
+    // Log the full breakdown until data is known-good, and again on the first
+    // success after any failure - i.e. exactly when someone is debugging a stuck
+    // dashboard - but stay quiet during steady-state refreshes.
+    let verbose = !state.dashboard_data_fresh.load(Ordering::Relaxed);
+
+    let ok = {
         let _guard = state.dashboard_fetch_lock.lock().await;
-        if let Some(data) = state.device_data.read().await.clone() {
-            Some(data)
-        } else {
-            match fetch_dashboard_data(&state, &app_handle).await {
-                Ok(data) => Some(data),
-                Err(e) => {
-                    // Prefer the last device shape persisted to disk so widget
-                    // types still resolve on a cold start; if there's no disk
-                    // cache either, return None so the frontend keeps whatever it
-                    // has and the background retry loop (which pushes
-                    // `dashboard-hydrated`) fills it in.
-                    let disk = std::fs::read_to_string(
-                        crate::services::cache_persist::device_data_cache_path(&state),
-                    )
-                    .ok()
-                    .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
-                    match disk {
-                        Some(d) => {
-                            append_log(
-                                &state,
-                                &format!("get_dashboard_data: fetch failed ({}); using device shape from disk cache", e),
-                            );
-                            Some(d)
-                        }
-                        None => {
-                            append_log(
-                                &state,
-                                &format!("get_dashboard_data: fetch failed ({}) and no disk device cache; returning devices=null", e),
-                            );
-                            None
-                        }
-                    }
-                }
+        match fetch_dashboard_data(state, verbose).await {
+            Ok(_) => true,
+            Err(e) => {
+                append_log(state, &format!("refresh_dashboard_data attempt failed: {}", e));
+                // Fall back to the disk seed for as long as we can't reach the
+                // server, so the next attempt logs verbosely again.
+                state.dashboard_data_fresh.store(false, Ordering::Relaxed);
+                false
             }
         }
     };
 
-    let values = state.last_values.read().await.clone();
+    emit_hydration(state, app_handle).await;
+    ok
+}
+
+/// Returns the cached device shape plus a full snapshot of the last-value cache.
+///
+/// **This never touches the network and never takes `dashboard_fetch_lock.`**
+/// It used to do both: on a cold `device_data` it performed the HTTP POST inline,
+/// behind a fair mutex shared with the startup prefetch, and only returned
+/// `values` once that resolved. On slow or flaky shop-floor wifi each attempt
+/// burned the full HTTP timeout and queued behind the other waiters, so the
+/// disk-seeded values that would have painted every widget instantly were held
+/// hostage for minutes behind a request that was going to fail anyway. Fetching
+/// is now exclusively the background refresher's job (see `main.rs`), which
+/// pushes results via `dashboard-hydrated`.
+#[tauri::command(async)]
+pub async fn get_dashboard_data(state: State<'_, AppState>) -> Result<DashboardDataOut, AppError> {
+    let snapshot = cached_snapshot(&state).await;
     append_log(
         &state,
         &format!(
-            "get_dashboard_data: returning {} device shapes, {} values",
-            devices.as_ref().and_then(|d| d.as_object()).map(|o| o.len()).unwrap_or(0),
-            values.len()
+            "get_dashboard_data (cache read): {} device shapes, {} values, fresh={}",
+            snapshot.devices.as_ref().and_then(|d| d.as_object()).map(|o| o.len()).unwrap_or(0),
+            snapshot.values.len(),
+            snapshot.fresh
         ),
     );
+    // Opportunistically ask for a refresh, but don't wait for it - the caller
+    // gets the cache now and the push later.
+    state.request_refresh();
+    Ok(snapshot)
+}
 
-    Ok(DashboardDataOut { devices, values })
+/// Called by the webview as soon as its Tauri event listeners are registered.
+/// Marks the frontend reachable and immediately pushes the current cache, so a
+/// `dashboard-hydrated` emitted before the page was listening can't be lost.
+#[tauri::command(async)]
+pub async fn frontend_ready(
+    state: State<'_, AppState>,
+    app_handle: AppHandle,
+) -> Result<DashboardDataOut, AppError> {
+    state.frontend_ready.store(true, Ordering::Relaxed);
+    append_log(&state, "frontend_ready: webview is listening");
+    let snapshot = cached_snapshot(&state).await;
+    emit_hydration(&state, &app_handle).await;
+    state.request_refresh();
+    Ok(snapshot)
+}
+
+/// Asks the background refresher to fetch now. Returns immediately - the result
+/// arrives as a `dashboard-hydrated` push.
+#[tauri::command(async)]
+pub async fn request_dashboard_refresh(state: State<'_, AppState>) -> Result<(), AppError> {
+    append_log(&state, "request_dashboard_refresh: refresh requested");
+    state.request_refresh();
+    Ok(())
 }

@@ -20,7 +20,7 @@ use tokio::sync::{Mutex, RwLock};
 use tokio::time::Duration;
 
 use crate::commands::{
-    dashboard::{compute_known_device_keys, get_dashboard, get_dashboard_data, prefetch_dashboard_data, save_dashboard_layout, save_device_to_dashboard, save_widget_to_dashboard},
+    dashboard::{compute_known_device_keys, frontend_ready, get_dashboard, get_dashboard_data, request_dashboard_refresh, save_dashboard_layout, save_device_to_dashboard, save_widget_to_dashboard},
     devices::{get_device, get_devices, get_last_value, get_own_device, post_remove_cache, test_exalise_connection},
     misc::{append_log, close_splashscreen, get_debiteuren, get_end_answer, get_pdf_file, get_question, get_quiz, write_to_log_file},
     mqtt::{cancel_shutdown, get_exalise_connection, send_message},
@@ -39,6 +39,11 @@ use crate::state::{AppConfig, AppState};
 const BROKER_URL: &str = "mqtt.exalise.com";
 const BROKER_PORT: u16 = 1883;
 
+/// How often the background refresher re-fetches dashboard data once it is
+/// succeeding. Values also arrive live over MQTT; this keeps device shape and any
+/// HTTP-only datapoints current, and re-establishes data after a wifi outage.
+const DASHBOARD_REFRESH_INTERVAL_SECS: u64 = 300;
+
 #[tokio::main]
 async fn main() {
     let settings_dir = compute_settings_dir();
@@ -56,16 +61,30 @@ async fn main() {
     let api: ApiSettings = load_or_default(&settings_dir.join("api.settings.json"));
     let basic: BasicSettings = load_or_default(&settings_dir.join("basic.settings.json"));
 
-    // Seed the last-value cache from the previous session so the UI can paint
-    // immediately on window-open, before the fresh fetch completes. The cache
-    // now lives in app_data_dir; on first launch after this change, migrate the
-    // previous cache from the old settings-dir location so nothing is lost.
-    let cache_path = app_data_dir.join("last_values.cache.json");
-    let persisted_last_values: HashMap<String, String> = if cache_path.exists() {
-        load_or_default(&cache_path)
-    } else {
-        load_or_default(&settings_dir.join("last_values.cache.json"))
-    };
+    // Seed BOTH caches from the previous session so the UI can paint
+    // last-known-good readings the instant the window opens, with no network at
+    // all. Each falls back to the pre-relocation settings-dir copy so upgrading
+    // installs don't start cold.
+    //
+    // Seeding `device_data` here (it used to start as `None` on every launch, and
+    // was only ever read back from disk inside get_dashboard_data's error branch)
+    // is what removes the network from the startup path entirely: shape and values
+    // are both in memory before the webview exists.
+    let persisted_last_values: HashMap<String, String> =
+        cache_persist::read_cache_with_legacy_fallback(
+            &app_data_dir,
+            &settings_dir,
+            cache_persist::CACHE_FILE_NAME,
+        )
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default();
+
+    let persisted_device_data: Option<serde_json::Value> =
+        cache_persist::read_cache_with_legacy_fallback(
+            &app_data_dir,
+            &settings_dir,
+            cache_persist::DEVICE_DATA_CACHE_FILE_NAME,
+        );
 
     // Device keys this installation actually owns - used to keep retained MQTT
     // messages from unrelated devices on the broker out of last_values/the
@@ -127,8 +146,11 @@ async fn main() {
         http_client,
         mqtt_client: Mutex::new(mqtt_client),
         last_values: RwLock::new(persisted_last_values),
-        device_data: RwLock::new(None),
+        device_data: RwLock::new(persisted_device_data),
         dashboard_fetch_lock: Mutex::new(()),
+        refresh_request: Arc::new(tokio::sync::Notify::new()),
+        dashboard_data_fresh: Arc::new(AtomicBool::new(false)),
+        frontend_ready: Arc::new(AtomicBool::new(false)),
         known_device_keys: RwLock::new(known_device_keys),
         config: RwLock::new(AppConfig { exalise, api, basic }),
         mqtt_connected: mqtt_connected.clone(),
@@ -150,30 +172,65 @@ async fn main() {
         .setup(move |app| {
             let app_handle = app.handle();
 
-            // Pre-populate the device-data and last-value caches in the
-            // background, retrying with backoff until the first fetch succeeds.
-            // Cold-boot autostart on the factory floor routinely runs before the
-            // network/DNS is up; a single attempt that failed used to leave the
-            // dashboard with no device shape and (before the retry loop) nothing
-            // to recover it. Each success pushes `dashboard-hydrated` to the UI.
-            let app_handle_init = app_handle.clone();
+            // The single owner of dashboard fetching. It is the ONLY thing in the
+            // app that talks to /api/getdashboarddata, so no frontend command can
+            // ever end up blocked on the network or on `dashboard_fetch_lock`.
+            //
+            // It never exits: backoff-retry while attempts fail, then a steady
+            // refresh interval. The old loop `break`ed on first success, so after
+            // that point nothing refreshed device shape or values except MQTT
+            // pushes and user action. Every attempt - success or failure - ends in
+            // a `dashboard-hydrated` push, so the UI converges even if the very
+            // first fetch is minutes late.
+            let app_handle_refresh = app_handle.clone();
             tauri::async_runtime::spawn(async move {
-                let state = app_handle_init.state::<AppState>();
-                let mut attempt: u32 = 0;
+                let state = app_handle_refresh.state::<AppState>();
+                let refresh_request = state.refresh_request.clone();
+                let mut failures: u32 = 0;
+                let mut successes: u32 = 0;
+
                 loop {
-                    if prefetch_dashboard_data(&state, &app_handle_init).await {
-                        break;
-                    }
-                    attempt += 1;
-                    let delay = std::cmp::min(2u64.saturating_pow(attempt), 30);
-                    append_log(
+                    let ok = commands::dashboard::refresh_dashboard_data(
                         &state,
-                        &format!(
-                            "prefetch retry loop: attempt {} failed, retrying in {}s",
-                            attempt, delay
-                        ),
-                    );
-                    tokio::time::sleep(Duration::from_secs(delay)).await;
+                        &app_handle_refresh,
+                    )
+                    .await;
+
+                    let delay = if ok {
+                        failures = 0;
+                        DASHBOARD_REFRESH_INTERVAL_SECS
+                    } else {
+                        failures += 1;
+                        std::cmp::min(2u64.saturating_pow(failures), 30)
+                    };
+                    // This loop runs for the life of the app, so a kiosk that is
+                    // offline all day would otherwise write thousands of identical
+                    // lines. Log every outcome while things are going wrong or just
+                    // recovered, then only occasionally once it's steady.
+                    let noisy_phase = !ok || failures > 0 || successes == 0;
+                    if noisy_phase || successes % 12 == 0 {
+                        append_log(
+                            &state,
+                            &format!(
+                                "dashboard refresher: attempt {}, next in {}s (consecutive failures: {})",
+                                if ok { "succeeded" } else { "failed" },
+                                delay,
+                                failures
+                            ),
+                        );
+                    }
+                    if ok {
+                        successes = successes.saturating_add(1);
+                    }
+
+                    // Wake early if something asks for a refresh (frontend ready,
+                    // dashboard edited, Refetch pressed).
+                    tokio::select! {
+                        _ = tokio::time::sleep(Duration::from_secs(delay)) => {}
+                        _ = refresh_request.notified() => {
+                            append_log(&state, "dashboard refresher: woken by refresh request");
+                        }
+                    }
                 }
             });
 
@@ -214,6 +271,8 @@ async fn main() {
             // Dashboard
             get_dashboard,
             get_dashboard_data,
+            frontend_ready,
+            request_dashboard_refresh,
             save_device_to_dashboard,
             save_widget_to_dashboard,
             save_dashboard_layout,

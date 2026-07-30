@@ -26,24 +26,27 @@ function App() {
       const init = async () => {
         enable().catch(console.error);
 
-        // Check for updates while still behind the splashscreen. If one is
-        // found, install and relaunch immediately - the app never shows the
-        // main window in an outdated state, and no update prompt is ever
-        // shown to the operator on the shop floor.
+        // Local disk reads only - get the dashboard on screen first, then open
+        // the window. Nothing here touches the network.
+        await Promise.all([loadDashboard(), loadSettings()]);
+        await invoke("close_splashscreen");
+
+        // The update check runs AFTER the app is usable, not before. It used to
+        // gate all of the above: on slow shop-floor wifi its network call held
+        // the splashscreen (and the dashboard load, and EventManager's real
+        // hydration pass) for as long as it took to resolve or fail. An update
+        // still installs and relaunches immediately when one is found - the
+        // operator just isn't made to stare at a splashscreen while we ask.
         try {
           const { shouldUpdate } = await checkUpdate();
           if (shouldUpdate) {
             console.log("Update found, installing and relaunching...");
             await installUpdate();
             await relaunch();
-            return;
           }
         } catch (err) {
           console.error("Update check failed", err);
         }
-
-        await Promise.all([loadDashboard(), loadSettings()]);
-        await invoke("close_splashscreen");
       };
       init().catch(console.error);
     }

@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::{Mutex, Notify, RwLock};
 use rumqttc::AsyncClient;
 
 use crate::models::settings::{ApiSettings, BasicSettings, ExaliseSettings};
@@ -16,12 +16,25 @@ pub struct AppState {
     /// In-memory cache of last known values per datapoint key (`"deviceKey---datapointKey"`).
     pub last_values: RwLock<HashMap<String, String>>,
     /// In-memory cache of device/group shape (connected + datapoint definitions),
-    /// keyed by device id, as returned by `/api/getdashboarddata`. `None` until the
-    /// first fetch completes.
+    /// keyed by device id, as returned by `/api/getdashboarddata`. Seeded from
+    /// `device_data.cache.json` at startup and refreshed by the background
+    /// refresher, so it is `None` only on a machine that has never once fetched.
     pub device_data: RwLock<Option<serde_json::Value>>,
-    /// Serializes concurrent `get_dashboard_data` callers so a cache miss triggers
-    /// exactly one HTTP fetch instead of one per caller.
+    /// Serializes dashboard fetches so overlapping refresh requests collapse into
+    /// one HTTP call. Only the background refresher ever takes this - no
+    /// frontend-facing command may block on it (see `get_dashboard_data`).
     pub dashboard_fetch_lock: Mutex<()>,
+    /// Poked to ask the background refresher to fetch now instead of waiting out
+    /// its backoff/interval. Used on dashboard edits and by the Refetch button.
+    pub refresh_request: Arc<Notify>,
+    /// True once a live `/api/getdashboarddata` fetch has succeeded this session,
+    /// i.e. the caches hold fresh data rather than the disk seed.
+    pub dashboard_data_fresh: Arc<AtomicBool>,
+    /// True once the webview has called `frontend_ready`, i.e. once a
+    /// `dashboard-hydrated` emit can actually be received. Tauri drops events
+    /// emitted at a window whose page hasn't registered listeners yet, silently
+    /// - this flag is what stops us logging such a push as delivered.
+    pub frontend_ready: Arc<AtomicBool>,
     /// Device keys this installation actually owns: every `device.key` in the
     /// current dashboard plus this kiosk's own master `device_key`. The MQTT
     /// event loop subscribes to `exalise/messages/#` (needed so the frontend can
@@ -64,5 +77,16 @@ impl AppState {
     pub async fn get_last_value(&self, key: &str) -> Option<String> {
         let map = self.last_values.read().await;
         map.get(key).cloned()
+    }
+
+    /// Asks the background refresher to fetch dashboard data now. Fire-and-forget:
+    /// if the refresher is already mid-fetch the wake-up is coalesced into the
+    /// next loop iteration, so callers never block on the network.
+    pub fn request_refresh(&self) {
+        self.refresh_request.notify_one();
+    }
+
+    pub fn is_frontend_ready(&self) -> bool {
+        self.frontend_ready.load(Ordering::Relaxed)
     }
 }
