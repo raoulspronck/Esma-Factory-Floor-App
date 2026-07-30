@@ -9,6 +9,15 @@ interface Rs232Data {
   decimal: string;
 }
 
+// Structured "app-log" entries from the backend's unified log_event —
+// the same data that's written to logs.txt, so the live view and the log
+// file tab always show the same stream.
+export interface LogEntry {
+  timestamp: string;
+  category: string;
+  message: string;
+}
+
 export interface DeviceData {
   connected?: boolean;
   dataPoint: any[];
@@ -45,8 +54,9 @@ interface ConnectionState {
   fileReceivePath: string;
   fileError: string;
 
-  // Connection error log — written by HelpMenu, read by ErrorLog modal
-  connectionErrorLog: string[];
+  // Live app log — written by HelpMenu (from the "app-log" event), read by
+  // the ErrorLog modal's Live tab.
+  appLog: LogEntry[];
 
   // Shutdown countdown — non-null when a backend-requested shutdown is pending
   shutdownSecondsLeft: number | null;
@@ -69,7 +79,7 @@ interface ConnectionState {
   setFileSendProgress: (v: string) => void;
   setFileReceivePath: (v: string) => void;
   setFileError: (v: string) => void;
-  appendConnectionError: (msg: string) => void;
+  appendAppLog: (entry: LogEntry) => void;
   setShutdownCountdown: (seconds: number | null) => void;
 }
 
@@ -89,7 +99,7 @@ export const useConnectionStore = create<ConnectionState>((set) => ({
   fileSendProgress: "",
   fileReceivePath: "",
   fileError: "",
-  connectionErrorLog: [],
+  appLog: [],
   shutdownSecondsLeft: null,
 
   setMqttStatus: (status) => set({ mqttStatus: status }),
@@ -120,9 +130,9 @@ export const useConnectionStore = create<ConnectionState>((set) => ({
   setFileSendProgress: (fileSendProgress) => set({ fileSendProgress }),
   setFileReceivePath: (fileReceivePath) => set({ fileReceivePath }),
   setFileError: (fileError) => set({ fileError }),
-  appendConnectionError: (msg) =>
+  appendAppLog: (entry) =>
     set((state) => ({
-      connectionErrorLog: [...state.connectionErrorLog.slice(-49), msg],
+      appLog: [...state.appLog.slice(-299), entry],
     })),
   setShutdownCountdown: (shutdownSecondsLeft) => set({ shutdownSecondsLeft }),
 }));

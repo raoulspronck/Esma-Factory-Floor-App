@@ -22,7 +22,7 @@ use tokio::time::Duration;
 use crate::commands::{
     dashboard::{compute_known_device_keys, frontend_ready, get_dashboard, get_dashboard_data, request_dashboard_refresh, save_dashboard_layout, save_device_to_dashboard, save_widget_to_dashboard},
     devices::{get_device, get_devices, get_last_value, get_own_device, post_remove_cache, test_exalise_connection},
-    misc::{append_log, close_splashscreen, get_debiteuren, get_end_answer, get_pdf_file, get_question, get_quiz, write_to_log_file},
+    misc::{close_splashscreen, get_debiteuren, get_end_answer, get_pdf_file, get_question, get_quiz, log_event, read_log_file, write_to_log_file},
     mqtt::{cancel_shutdown, get_exalise_connection, send_message},
     rs232::{get_all_availble_ports, start_file_receive, start_file_send, stop_file_receive, stop_file_send},
     settings::{
@@ -33,7 +33,7 @@ use crate::commands::{
 };
 use crate::config::{load_or_default, paths::{compute_app_data_dir, compute_settings_dir}, save_json};
 use crate::models::settings::{ApiSettings, BasicSettings, ExaliseSettings};
-use crate::services::{cache_persist, mqtt_service, rs232_service::start_rs232_monitor};
+use crate::services::{cache_persist, log_retention, mqtt_service, rs232_service::start_rs232_monitor};
 use crate::state::{AppConfig, AppState};
 
 const BROKER_URL: &str = "mqtt.exalise.com";
@@ -190,6 +190,7 @@ async fn main() {
                 let mut successes: u32 = 0;
 
                 loop {
+<<<<<<< HEAD
                     let ok = commands::dashboard::refresh_dashboard_data(
                         &state,
                         &app_handle_refresh,
@@ -231,12 +232,34 @@ async fn main() {
                             append_log(&state, "dashboard refresher: woken by refresh request");
                         }
                     }
+=======
+                    if prefetch_dashboard_data(&state, &app_handle_init).await {
+                        break;
+                    }
+                    attempt += 1;
+                    let delay = std::cmp::min(2u64.saturating_pow(attempt), 30);
+                    log_event(
+                        &state,
+                        &app_handle_init,
+                        "system",
+                        &format!(
+                            "prefetch retry loop: attempt {} failed, retrying in {}s",
+                            attempt, delay
+                        ),
+                    );
+                    tokio::time::sleep(Duration::from_secs(delay)).await;
+>>>>>>> 004bbe061c2c1c5cc958c3b6359618b5d70d1256
                 }
             });
 
             // Periodically persist the (MQTT-updated) in-memory cache to disk, so a
             // future restart has a recent seed to paint the UI with instantly.
             cache_persist::start_periodic_flush(app_handle.clone());
+
+            // Bound logs.txt to the last 30 days - runs once immediately (so a
+            // kiosk that's had this growing unbounded for months gets trimmed
+            // right away) and then once a day.
+            log_retention::start_periodic_prune(app_handle.clone());
 
             // Day-off check now runs from close_splashscreen (misc.rs), invoked
             // by the frontend once it's actually ready to receive events -
@@ -308,6 +331,7 @@ async fn main() {
             close_splashscreen,
             get_pdf_file,
             write_to_log_file,
+            read_log_file,
             get_debiteuren,
             get_quiz,
             get_question,

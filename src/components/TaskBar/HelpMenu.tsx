@@ -1,25 +1,17 @@
 import { Flex, Icon, Menu, MenuButton, MenuItem, MenuList, Text, useDisclosure } from "@chakra-ui/react";
-import { listen } from "@tauri-apps/api/event";
-import { useEffect, useRef } from "react";
 import { MdError } from "react-icons/md";
 
 import ErrorLog from "../Help/ErrorLog";
-import { useConnectionStore } from "../../stores/connectionStore";
+import { useTauriEvent } from "../../hooks/useTauriEvent";
+import { LogEntry, useConnectionStore } from "../../stores/connectionStore";
 
 export default function HelpMenu() {
-  const connectionErrorLog = useConnectionStore((s) => s.connectionErrorLog);
-  const appendConnectionError = useConnectionStore((s) => s.appendConnectionError);
+  const appLog = useConnectionStore((s) => s.appLog);
+  const appendAppLog = useConnectionStore((s) => s.appendAppLog);
 
   const { isOpen, onOpen, onClose } = useDisclosure();
 
-  const initialized = useRef(false);
-  useEffect(() => {
-    if (initialized.current) return;
-    initialized.current = true;
-    listen("exalise-connection-status", (e) => {
-      appendConnectionError(`${e.payload as string}\r\n`);
-    });
-  }, []);
+  useTauriEvent<LogEntry>("app-log", (e) => appendAppLog(e.payload));
 
   return (
     <Menu closeOnSelect={false} gutter={8}>
@@ -54,11 +46,7 @@ export default function HelpMenu() {
             <Text>View logs</Text>
           </Flex>
         </MenuItem>
-        <ErrorLog
-          isOpen={isOpen}
-          onClose={onClose}
-          connectionErrorText={connectionErrorLog}
-        />
+        <ErrorLog isOpen={isOpen} onClose={onClose} appLog={appLog} />
       </MenuList>
     </Menu>
   );

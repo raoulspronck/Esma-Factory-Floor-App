@@ -1,11 +1,19 @@
-use chrono::prelude::*;
 use rumqttc::{AsyncClient, ConnAck, ConnectReturnCode, Event, EventLoop, Packet, QoS};
 use std::str;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::{Duration as StdDuration, Instant};
 use tauri::Manager; // for get_window, emit_all, state
 
+use crate::commands::misc::log_event;
 use crate::state::AppState;
+
+/// Once a connection error has been logged, further errors from the same
+/// outage are suppressed for this long - `rumqttc` retries every second with
+/// no backoff of its own, so without this a prolonged broker outage would
+/// write one line to logs.txt per second (86k+ lines/day) instead of one
+/// entry plus periodic reminders.
+const ERROR_LOG_INTERVAL: StdDuration = StdDuration::from_secs(5 * 60);
 
 /// Spawns the MQTT event loop task.
 /// Handles connection, subscriptions, message routing, and window event emission.
@@ -19,18 +27,15 @@ pub fn start_mqtt_loop(
     tauri::async_runtime::spawn(async move {
         let main_window = app_handle.get_window("main").unwrap();
         let mut connected = false;
+        // None until the first error of the current outage is logged; Some
+        // once logged, so later errors in the same outage stay throttled.
+        let mut last_error_logged: Option<Instant> = None;
 
         loop {
             let notification = eventloop.poll().await;
-            let time = Local::now().to_string();
 
             match notification {
                 Ok(event) => {
-                    let _ = main_window.emit(
-                        "exalise-connection-status",
-                        format!("{} - {:?}", time, event),
-                    );
-
                     if let Event::Incoming(Packet::ConnAck(ConnAck {
                         session_present: _,
                         code,
@@ -41,6 +46,14 @@ pub fn start_mqtt_loop(
                                 mqtt_connected.store(true, Ordering::Relaxed);
                                 let _ = main_window.emit("exalise-connection", "connected");
                                 connected = true;
+                                let state = app_handle.state::<AppState>();
+                                let message = if last_error_logged.is_some() {
+                                    "Reconnected to broker"
+                                } else {
+                                    "Connected to broker"
+                                };
+                                log_event(&state, &app_handle, "mqtt", message);
+                                last_error_logged = None;
                             }
                             let _ = client
                                 .subscribe("exalise/messages/#", QoS::AtMostOnce)
@@ -112,13 +125,22 @@ pub fn start_mqtt_loop(
                     }
                 }
                 Err(e) => {
-                    let _ = main_window
-                        .emit("exalise-connection-status", format!("{:?}", e));
                     if connected {
                         mqtt_connected.store(false, Ordering::Relaxed);
                         let _ = main_window.emit("exalise-connection", "disconnected");
                         connected = false;
                     }
+
+                    let should_log = match last_error_logged {
+                        None => true,
+                        Some(last) => last.elapsed() >= ERROR_LOG_INTERVAL,
+                    };
+                    if should_log {
+                        let state = app_handle.state::<AppState>();
+                        log_event(&state, &app_handle, "mqtt", &format!("Connection error: {:?}", e));
+                        last_error_logged = Some(Instant::now());
+                    }
+
                     // rumqttc does not back off on its own; without a delay here a
                     // persistent connect failure spins into a tight reconnect loop that
                     // hammers socket creation and can trip spurious OS-level socket

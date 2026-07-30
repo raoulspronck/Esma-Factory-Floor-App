@@ -7,7 +7,7 @@ use tauri::{AppHandle, Manager, State};
 
 use crate::config::save_json;
 use crate::error::AppError;
-use crate::commands::misc::append_log;
+use crate::commands::misc::log_event;
 use crate::models::dashboard::{legacy, v2, Dashboard, Device, ValueResponse, Widget};
 use crate::services::http::read_api_response;
 use crate::state::AppState;
@@ -493,6 +493,7 @@ async fn fetch_dashboard_data(
     let path = state.settings_dir.join("dashboard.exalise.json");
     let dashboard = load_dashboard(&path);
     if !path.exists() {
+<<<<<<< HEAD
         // Nothing to fetch for, but don't overwrite a cached shape with `{}` - a
         // settings dir that momentarily can't be read (locked-down kiosk user,
         // network share not mounted yet) must not wipe the last known good shape.
@@ -509,6 +510,23 @@ async fn fetch_dashboard_data(
             ),
         );
     }
+=======
+        log_event(state, app_handle, "dashboard", "fetch_dashboard_data: dashboard.exalise.json not found or invalid");
+        let empty = serde_json::json!({});
+        *state.device_data.write().await = Some(empty.clone());
+        return Ok(empty);
+    }
+
+    log_event(
+        state,
+        app_handle,
+        "dashboard",
+        &format!(
+            "fetch_dashboard_data: dashboard loaded with {} devices",
+            dashboard.devices.len()
+        ),
+    );
+>>>>>>> 004bbe061c2c1c5cc958c3b6359618b5d70d1256
 
     let (http_key, http_secret, device_key) = {
         let config = state.config.read().await;
@@ -534,33 +552,43 @@ async fn fetch_dashboard_data(
         .send()
         .await
         .map_err(|e| {
-            append_log(state, &format!("fetch_dashboard_data HTTP request failed: {}", e));
+            log_event(state, app_handle, "dashboard", &format!("fetch_dashboard_data HTTP request failed: {}", e));
             e
         })?;
 
     let status = response.status();
+<<<<<<< HEAD
     if verbose {
         append_log(state, &format!("fetch_dashboard_data: HTTP status {}", status));
     }
+=======
+    log_event(state, app_handle, "dashboard", &format!("fetch_dashboard_data: HTTP status {}", status));
+>>>>>>> 004bbe061c2c1c5cc958c3b6359618b5d70d1256
 
     // read_api_response turns any non-2xx into AppError::Api(status, body) so an
     // error body never reaches the JSON parser as if it were data.
     let text = read_api_response(response).await.map_err(|e| {
-        append_log(state, &format!("fetch_dashboard_data failed: {}", e));
+        log_event(state, app_handle, "dashboard", &format!("fetch_dashboard_data failed: {}", e));
         e
     })?;
 
+<<<<<<< HEAD
     if verbose {
         append_log(state, &format!("fetch_dashboard_data: response body {} chars", text.len()));
     }
+=======
+    log_event(state, app_handle, "dashboard", &format!("fetch_dashboard_data: response body {} chars", text.len()));
+>>>>>>> 004bbe061c2c1c5cc958c3b6359618b5d70d1256
 
     // The API answers server-side failures with HTTP 200 and a bare string body
     // (`"Error"` / `"UNAUTHENTICATED"`) rather than an error status, so without
     // this an auth/DB problem would surface only as a confusing JSON parse error.
     let trimmed = text.trim();
     if trimmed == "Error" || trimmed == "UNAUTHENTICATED" || trimmed.is_empty() {
-        append_log(
+        log_event(
             state,
+            app_handle,
+            "dashboard",
             &format!("fetch_dashboard_data: server returned non-data body '{}' (status {})", trimmed, status),
         );
         return Err(AppError::Other(format!(
@@ -570,16 +598,20 @@ async fn fetch_dashboard_data(
     }
 
     let parsed: DashboardDataResponse = serde_json::from_str(&text).map_err(|e| {
-        append_log(
+        log_event(
             state,
+            app_handle,
+            "dashboard",
             &format!("fetch_dashboard_data JSON parse failed: {} / response: {}", e, text),
         );
         e
     })?;
 
     let device_count = parsed.devices.as_object().map(|o| o.len()).unwrap_or(0);
-    append_log(
+    log_event(
         state,
+        app_handle,
+        "dashboard",
         &format!(
             "fetch_dashboard_data: parsed {} values, {} devices",
             parsed.values.len(),
@@ -590,6 +622,7 @@ async fn fetch_dashboard_data(
     // Per-device datapoint counts make "widget stuck loading" diagnosable from
     // the log alone: a widget referencing a datapoint the device shape doesn't
     // define is the classic cause, and it shows up here as a low/zero count.
+<<<<<<< HEAD
     // Only on the diagnostically interesting attempts (startup, or the first
     // success after a failure) - the refresher now runs for the life of the app,
     // and emitting this block every few minutes forever would bury the log.
@@ -615,12 +648,38 @@ async fn fetch_dashboard_data(
             None => {
                 append_log(state, "fetch_dashboard_data: WARNING devices payload is not a JSON object");
             }
+=======
+    match parsed.devices.as_object() {
+        Some(obj) => {
+            for (id, shape) in obj {
+                let dp_count = shape
+                    .get("dataPoint")
+                    .and_then(|d| d.as_array())
+                    .map(|a| a.len())
+                    .unwrap_or(0);
+                let connected = shape.get("connected").and_then(|c| c.as_bool());
+                log_event(
+                    state,
+                    app_handle,
+                    "dashboard",
+                    &format!(
+                        "fetch_dashboard_data: device {} -> {} datapoints, connected={:?}",
+                        id, dp_count, connected
+                    ),
+                );
+            }
+        }
+        None => {
+            log_event(state, app_handle, "dashboard", "fetch_dashboard_data: WARNING devices payload is not a JSON object");
+>>>>>>> 004bbe061c2c1c5cc958c3b6359618b5d70d1256
         }
     }
 
     if parsed.values.is_empty() {
-        append_log(
+        log_event(
             state,
+            app_handle,
+            "dashboard",
             "fetch_dashboard_data: WARNING parsed 0 values - HTTP-only widgets (no live MQTT) will show 'No data'",
         );
     }
@@ -680,22 +739,53 @@ async fn emit_hydration(state: &AppState, app_handle: &AppHandle) {
 
     match app_handle.get_window("main") {
         Some(win) => match win.emit("dashboard-hydrated", &payload) {
-            Ok(_) => append_log(
+            Ok(_) => log_event(
                 state,
+<<<<<<< HEAD
                 &format!(
                     "emit_hydration: pushed dashboard-hydrated ({} device shapes, {} values, fresh={})",
                     device_count, value_count, payload.fresh
                 ),
+=======
+                app_handle,
+                "dashboard",
+                &format!("emit_hydration: pushed dashboard-hydrated ({} values)", value_count),
+>>>>>>> 004bbe061c2c1c5cc958c3b6359618b5d70d1256
             ),
-            Err(e) => append_log(state, &format!("emit_hydration: emit failed: {}", e)),
+            Err(e) => log_event(state, app_handle, "dashboard", &format!("emit_hydration: emit failed: {}", e)),
         },
-        None => append_log(state, "emit_hydration: main window not found; push skipped"),
+        None => log_event(state, app_handle, "dashboard", "emit_hydration: main window not found; push skipped"),
     };
 }
 
+<<<<<<< HEAD
 /// One refresh attempt, then a push of whatever we now hold. Serialized on
 /// `dashboard_fetch_lock` so overlapping refresh requests collapse into one POST.
 /// Returns whether the fetch itself succeeded.
+=======
+/// One prefetch attempt, guarded by `dashboard_fetch_lock` so it can't race a
+/// concurrent frontend `get_dashboard_data` into two duplicate POSTs. Returns
+/// whether device shape is now populated (i.e. whether a retry is still needed).
+/// The lock is released as soon as the attempt returns, so the retry loop's
+/// backoff sleep never blocks a waiting frontend caller.
+pub async fn prefetch_dashboard_data(state: &AppState, app_handle: &AppHandle) -> bool {
+    let _guard = state.dashboard_fetch_lock.lock().await;
+    if state.device_data.read().await.is_some() {
+        return true;
+    }
+    match fetch_dashboard_data(state, app_handle).await {
+        Ok(_) => true,
+        Err(e) => {
+            log_event(state, app_handle, "dashboard", &format!("prefetch_dashboard_data attempt failed: {}", e));
+            false
+        }
+    }
+}
+
+/// Returns cached device data (connected + datapoints) plus a snapshot of the
+/// last-value cache, fetching first if nothing is cached yet. Concurrent
+/// callers on a cold cache share one in-flight fetch instead of firing one each.
+>>>>>>> 004bbe061c2c1c5cc958c3b6359618b5d70d1256
 ///
 /// Note there is no `device_data.is_some()` early-out any more: shape is seeded
 /// from disk at startup, so that check used to make the refresher declare victory
@@ -708,6 +798,7 @@ pub async fn refresh_dashboard_data(state: &AppState, app_handle: &AppHandle) ->
 
     let ok = {
         let _guard = state.dashboard_fetch_lock.lock().await;
+<<<<<<< HEAD
         match fetch_dashboard_data(state, verbose).await {
             Ok(_) => true,
             Err(e) => {
@@ -716,10 +807,50 @@ pub async fn refresh_dashboard_data(state: &AppState, app_handle: &AppHandle) ->
                 // server, so the next attempt logs verbosely again.
                 state.dashboard_data_fresh.store(false, Ordering::Relaxed);
                 false
+=======
+        if let Some(data) = state.device_data.read().await.clone() {
+            Some(data)
+        } else {
+            match fetch_dashboard_data(&state, &app_handle).await {
+                Ok(data) => Some(data),
+                Err(e) => {
+                    // Prefer the last device shape persisted to disk so widget
+                    // types still resolve on a cold start; if there's no disk
+                    // cache either, return None so the frontend keeps whatever it
+                    // has and the background retry loop (which pushes
+                    // `dashboard-hydrated`) fills it in.
+                    let disk = std::fs::read_to_string(
+                        crate::services::cache_persist::device_data_cache_path(&state),
+                    )
+                    .ok()
+                    .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
+                    match disk {
+                        Some(d) => {
+                            log_event(
+                                &state,
+                                &app_handle,
+                                "dashboard",
+                                &format!("get_dashboard_data: fetch failed ({}); using device shape from disk cache", e),
+                            );
+                            Some(d)
+                        }
+                        None => {
+                            log_event(
+                                &state,
+                                &app_handle,
+                                "dashboard",
+                                &format!("get_dashboard_data: fetch failed ({}) and no disk device cache; returning devices=null", e),
+                            );
+                            None
+                        }
+                    }
+                }
+>>>>>>> 004bbe061c2c1c5cc958c3b6359618b5d70d1256
             }
         }
     };
 
+<<<<<<< HEAD
     emit_hydration(state, app_handle).await;
     ok
 }
@@ -739,7 +870,13 @@ pub async fn refresh_dashboard_data(state: &AppState, app_handle: &AppHandle) ->
 pub async fn get_dashboard_data(state: State<'_, AppState>) -> Result<DashboardDataOut, AppError> {
     let snapshot = cached_snapshot(&state).await;
     append_log(
+=======
+    let values = state.last_values.read().await.clone();
+    log_event(
+>>>>>>> 004bbe061c2c1c5cc958c3b6359618b5d70d1256
         &state,
+        &app_handle,
+        "dashboard",
         &format!(
             "get_dashboard_data (cache read): {} device shapes, {} values, fresh={}",
             snapshot.devices.as_ref().and_then(|d| d.as_object()).map(|o| o.len()).unwrap_or(0),
