@@ -190,7 +190,6 @@ async fn main() {
                 let mut successes: u32 = 0;
 
                 loop {
-<<<<<<< HEAD
                     let ok = commands::dashboard::refresh_dashboard_data(
                         &state,
                         &app_handle_refresh,
@@ -210,8 +209,10 @@ async fn main() {
                     // recovered, then only occasionally once it's steady.
                     let noisy_phase = !ok || failures > 0 || successes == 0;
                     if noisy_phase || successes % 12 == 0 {
-                        append_log(
+                        log_event(
                             &state,
+                            &app_handle_refresh,
+                            "dashboard",
                             &format!(
                                 "dashboard refresher: attempt {}, next in {}s (consecutive failures: {})",
                                 if ok { "succeeded" } else { "failed" },
@@ -229,26 +230,14 @@ async fn main() {
                     tokio::select! {
                         _ = tokio::time::sleep(Duration::from_secs(delay)) => {}
                         _ = refresh_request.notified() => {
-                            append_log(&state, "dashboard refresher: woken by refresh request");
+                            log_event(
+                                &state,
+                                &app_handle_refresh,
+                                "dashboard",
+                                "dashboard refresher: woken by refresh request",
+                            );
                         }
                     }
-=======
-                    if prefetch_dashboard_data(&state, &app_handle_init).await {
-                        break;
-                    }
-                    attempt += 1;
-                    let delay = std::cmp::min(2u64.saturating_pow(attempt), 30);
-                    log_event(
-                        &state,
-                        &app_handle_init,
-                        "system",
-                        &format!(
-                            "prefetch retry loop: attempt {} failed, retrying in {}s",
-                            attempt, delay
-                        ),
-                    );
-                    tokio::time::sleep(Duration::from_secs(delay)).await;
->>>>>>> 004bbe061c2c1c5cc958c3b6359618b5d70d1256
                 }
             });
 

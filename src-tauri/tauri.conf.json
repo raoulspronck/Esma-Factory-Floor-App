@@ -8,11 +8,7 @@
   },
   "package": {
     "productName": "Exalise production monitoring software",
-<<<<<<< HEAD
     "version": "2.3.6"
-=======
-    "version": "2.3.4"
->>>>>>> 004bbe061c2c1c5cc958c3b6359618b5d70d1256
   },
   "tauri": {
     "allowlist": {
