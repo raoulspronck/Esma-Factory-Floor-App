@@ -11,12 +11,14 @@ import { checkUpdate, installUpdate } from "@tauri-apps/api/updater";
 import { relaunch } from "@tauri-apps/api/process";
 import { enable } from "tauri-plugin-autostart-api";
 
+import { useConnectionStore } from "./stores/connectionStore";
 import { useDashboardStore } from "./stores/dashboardStore";
 import { useSettingsStore } from "./stores/settingsStore";
 
 function App() {
   const loadDashboard = useDashboardStore((s) => s.loadDashboard);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
+  const loadAlerts = useConnectionStore((s) => s.loadAlerts);
 
   const initialized = useRef(false);
 
@@ -28,7 +30,7 @@ function App() {
 
         // Local disk reads only - get the dashboard on screen first, then open
         // the window. Nothing here touches the network.
-        await Promise.all([loadDashboard(), loadSettings()]);
+        await Promise.all([loadDashboard(), loadSettings(), loadAlerts()]);
         await invoke("close_splashscreen");
 
         // The update check runs AFTER the app is usable, not before. It used to
@@ -50,7 +52,7 @@ function App() {
       };
       init().catch(console.error);
     }
-  }, [loadDashboard, loadSettings]);
+  }, [loadDashboard, loadSettings, loadAlerts]);
 
   return (
     <Flex

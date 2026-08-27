@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { Alert } from "../types";
+import { getAlerts } from "../api/settings";
 
 interface Rs232Data {
   device?: string;
@@ -72,6 +73,7 @@ interface ConnectionState {
   setLastValueTimestamps: (values: Record<string, string>) => void;
   setDeviceData: (data: Record<string, DeviceData>) => void;
   setAlerts: (alerts: Alert[]) => void;
+  loadAlerts: () => Promise<void>;
   setActiveAlertMessage: (msg: string) => void;
   setFileSend: (v: boolean) => void;
   setFileReceive: (v: boolean) => void;
@@ -123,6 +125,19 @@ export const useConnectionStore = create<ConnectionState>((set) => ({
     })),
   setDeviceData: (data) => set({ deviceData: data }),
   setAlerts: (alerts) => set({ alerts }),
+  // Reads alerts.exalise.json via the backend. Called once at startup from
+  // App.tsx - it used to be invoked from ViewMenu, which only mounts while a
+  // user is logged in, so on a kiosk (login defaults to false) the list stayed
+  // empty forever and AlertsDialog never subscribed to a single alert topic.
+  loadAlerts: async () => {
+    try {
+      const alerts = await getAlerts();
+      console.log(`[alerts] loaded ${alerts.length} configured alert(s)`);
+      set({ alerts });
+    } catch (e) {
+      console.error("[alerts] loading alerts failed:", e);
+    }
+  },
   setActiveAlertMessage: (msg) => set({ activeAlertMessage: msg }),
   setFileSend: (fileSend) => set({ fileSend }),
   setFileReceive: (fileReceive) => set({ fileReceive }),

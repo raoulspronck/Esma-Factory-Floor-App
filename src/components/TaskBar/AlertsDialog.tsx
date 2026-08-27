@@ -27,7 +27,6 @@ export default function AlertsDialog() {
 
   const activeAlerts = useRef<string[]>([]);
   const [displayActiveAlerts, setDisplayActiveAlerts] = useState<string[]>([]);
-  const [subscribedAlerts, setSubscribedAlerts] = useState<string[]>([]);
 
   const acceptNotification = (notification: string) => {
     const parts = notification.split("/");
@@ -51,25 +50,40 @@ export default function AlertsDialog() {
     });
   }, []);
 
-  // Subscribe to notification events for each alert when the alerts list changes
+  // Subscribe to the notification event of every configured alert. The backend
+  // relays *all* MQTT traffic as `notification---<deviceKey>---<datapoint>`,
+  // so an alert fires regardless of whether its device is on the dashboard.
+  //
+  // Re-runs whenever the alert list changes and tears its listeners down again:
+  // the previous version tracked "already subscribed" in state and only ever
+  // added, so an alert removed in "Manage alerts" kept firing until restart.
   useEffect(() => {
-    for (let i = 0; i < alerts.length; i++) {
-      const alert_key = `notification---${alerts[i].device_key}---${alerts[i].data_point}`;
-      if (!subscribedAlerts.includes(alert_key)) {
-        listen(alert_key, (event) => {
-          const message = event.payload as string;
-          const notification_key = `${alert_key}/${message}/${alerts[i].require_accept}`;
-          if (!activeAlerts.current.includes(notification_key)) {
-            const updated = [notification_key, ...activeAlerts.current];
-            activeAlerts.current = updated;
-            setDisplayActiveAlerts([...updated]);
-            onOpen();
-          }
-        });
-        setSubscribedAlerts((prev) => [...prev, alert_key]);
-      }
+    let cancelled = false;
+    const unlisteners: Array<() => void> = [];
+
+    for (const alert of alerts) {
+      const alertKey = `notification---${alert.device_key}---${alert.data_point}`;
+
+      listen<string>(alertKey, (event) => {
+        const notificationKey = `${alertKey}/${event.payload}/${alert.require_accept}`;
+        if (activeAlerts.current.includes(notificationKey)) return;
+        const updated = [notificationKey, ...activeAlerts.current];
+        activeAlerts.current = updated;
+        setDisplayActiveAlerts([...updated]);
+        onOpen();
+      }).then((unlisten) => {
+        // The effect may already have been cleaned up by the time Tauri
+        // resolves the registration - drop the listener instead of leaking it.
+        if (cancelled) unlisten();
+        else unlisteners.push(unlisten);
+      });
     }
-  }, [alerts]);
+
+    return () => {
+      cancelled = true;
+      unlisteners.forEach((unlisten) => unlisten());
+    };
+  }, [alerts, onOpen]);
 
   return (
     <AlertDialog

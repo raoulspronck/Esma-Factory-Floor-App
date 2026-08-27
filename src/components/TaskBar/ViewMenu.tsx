@@ -1,6 +1,5 @@
 import { Flex, Icon, Menu, MenuButton, MenuItem, MenuList, Text, useDisclosure } from "@chakra-ui/react";
-import { invoke } from "@tauri-apps/api";
-import { ElementType, useEffect, useRef } from "react";
+import { ElementType } from "react";
 import { MdAddToQueue } from "react-icons/md";
 import { TbExchange, TbRefreshAlert } from "react-icons/tb";
 
@@ -23,14 +22,9 @@ export default function ViewMenu() {
   const { isOpen: isOpenAddDevice, onOpen: onOpenAddDevice, onClose: onCloseAddDevice } = useDisclosure();
   const { isOpen: isOpenManageAlerts, onOpen: onOpenManageAlerts, onClose: onCloseManageAlerts } = useDisclosure();
 
-  const initialized = useRef(false);
-  useEffect(() => {
-    if (initialized.current) return;
-    initialized.current = true;
-    invoke("get_alerts")
-      .then((e) => setAlerts(JSON.parse(e as string).alerts))
-      .catch(console.log);
-  }, []);
+  // NOTE: alerts are loaded at startup by App.tsx (connectionStore.loadAlerts).
+  // This menu only mounts while logged in, so loading them here meant a kiosk
+  // that is never logged into had no alerts at all.
 
   const setDashboardCompat = (d: Dashboard | ((prev: Dashboard) => Dashboard)) => {
     const resolved = typeof d === "function" ? d(dashboard) : d;
