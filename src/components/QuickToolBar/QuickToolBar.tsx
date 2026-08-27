@@ -6,9 +6,10 @@ import CalculatorModal from "./modals/CalculatorModal";
 import SpindleModal from "./modals/SpindleModal";
 import CallingAlert from "./alerts/CallingAlert";
 import DynamicComponent from "../DynamicIconImport";
-import { MdCable, MdQuiz } from "react-icons/md";
+import { MdAccessTime, MdCable, MdQuiz } from "react-icons/md";
 import QuizModal from "./modals/QuizModal";
 import RS232MonitorModal from "./modals/RS232MonitorModal";
+import TimeClockModal from "./modals/TimeClockModal";
 
 const QuickToolBar: React.FC<{ children?: React.ReactNode }> = ({
   children,
@@ -34,6 +35,12 @@ const QuickToolBar: React.FC<{ children?: React.ReactNode }> = ({
     isOpen: isOpenRS232Monitor,
     onOpen: onOpenRS232Monitor,
     onClose: onCloseRS232Monitor,
+  } = useDisclosure();
+
+  const {
+    isOpen: isOpenTimeClock,
+    onOpen: onOpenTimeClock,
+    onClose: onCloseTimeClock,
   } = useDisclosure();
 
   const callJohn = () => {
@@ -96,6 +103,17 @@ const QuickToolBar: React.FC<{ children?: React.ReactNode }> = ({
         onClick={onOpenRS232Monitor}
       />
 
+      <IconButton
+        ml={3}
+        icon={<MdAccessTime color={"white"} />}
+        aria-label="Clock in or out"
+        colorScheme={"blackAlpha"}
+        height={"80px"}
+        width="80px"
+        fontSize={"50px"}
+        onClick={onOpenTimeClock}
+      />
+
       <CallingAlert isOpen={isOpenCallingAlert} onClose={onCloseCallingAlert} />
       <CalculatorModal isOpen={isOpenCalculator} onClose={onCloseCalculator} />
       <QuizModal isOpen={isOpenQuiz} onClose={onCloseQuiz} />
@@ -103,6 +121,7 @@ const QuickToolBar: React.FC<{ children?: React.ReactNode }> = ({
         isOpen={isOpenRS232Monitor}
         onClose={onCloseRS232Monitor}
       />
+      <TimeClockModal isOpen={isOpenTimeClock} onClose={onCloseTimeClock} />
     </Flex>
   );
 };

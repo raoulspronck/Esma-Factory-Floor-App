@@ -1,0 +1,691 @@
+import {
+  Box,
+  Button,
+  Circle,
+  Flex,
+  Grid,
+  Heading,
+  Icon,
+  IconButton,
+  Input,
+  InputGroup,
+  InputLeftElement,
+  Modal,
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalOverlay,
+  SimpleGrid,
+  Spinner,
+  Text,
+} from "@chakra-ui/react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BsArrowLeft } from "react-icons/bs";
+import { MdCheck, MdClose, MdRefresh, MdSearch } from "react-icons/md";
+
+import { kioskClock, kioskGetEmployees, kioskSetInitialPin } from "../../../api/kiosk";
+import { KioskEmployee, KioskOutcome } from "../../../types";
+import { PendingClockEvent, clockEventIdFor } from "../../../utils/clockEventId";
+
+// The same avatar palette the web kiosk uses, so a person's tile is the same
+// colour whichever screen they walk up to.
+const AVATAR_COLORS = ["#439be3", "#3ecf8e", "#a374ff", "#ff9f43", "#ff6b6b"];
+
+const avatarColorFor = (name: string): string => {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+};
+
+const initialsFor = (firstName: string, lastName: string): string =>
+  `${firstName[0] ?? ""}${lastName[0] ?? ""}`.toUpperCase();
+
+const fullName = (e: KioskEmployee): string => `${e.firstName} ${e.lastName}`;
+
+type View = "grid" | "pin" | "choose-pin" | "result";
+
+type ClockResultView = {
+  ok: boolean;
+  message: string;
+  submessage?: string;
+};
+
+interface TimeClockModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+/**
+ * The floor terminal's time clock: the same flow as the wall-mounted kiosk
+ * tablet, run from the quick tool bar of a machine that is already standing in
+ * the workshop. Tap a name, enter a 4-digit PIN, and the tap is recorded as a
+ * check-in or check-out.
+ *
+ * The one thing it does that the tablet does not: somebody who has never been
+ * given a PIN picks one here, on the spot. A personnel record created in the
+ * dashboard starts with no PIN at all, and without this the only way to get one
+ * was the invite email and the phone app - which is exactly the thing a factory
+ * floor worker does not have. The API only ever accepts a *first* PIN from a
+ * terminal credential, never a change, so this cannot be used to take over a
+ * colleague's account.
+ */
+const TimeClockModal: React.FC<TimeClockModalProps> = ({ isOpen, onClose }) => {
+  const [employees, setEmployees] = useState<KioskEmployee[] | null>(null);
+  const [listOutcome, setListOutcome] = useState<KioskOutcome>("ok");
+  const [loading, setLoading] = useState(false);
+
+  const [view, setView] = useState<View>("grid");
+  const [selected, setSelected] = useState<KioskEmployee | null>(null);
+  const [nameSearch, setNameSearch] = useState("");
+
+  const [pin, setPin] = useState("");
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [cooldownMs, setCooldownMs] = useState<number | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Two-step so a mistyped first PIN is caught here rather than locking someone
+  // out of the terminal they just enrolled on.
+  const [choosePinStage, setChoosePinStage] = useState<"enter" | "confirm">("enter");
+  const [firstPin, setFirstPin] = useState("");
+
+  const [result, setResult] = useState<ClockResultView | null>(null);
+
+  // Held between attempts so a tap whose reply never arrived can be retried
+  // under the same identity. Scoped to the employee it belongs to: this is a
+  // shared screen, and reusing one person's id for the next person's tap would
+  // hand them somebody else's replayed result.
+  const pendingClockEvent = useRef<(PendingClockEvent & { employeeId: string }) | null>(
+    null
+  );
+
+  const loadEmployees = useCallback(async (showSpinner: boolean) => {
+    if (showSpinner) setLoading(true);
+    try {
+      const response = await kioskGetEmployees();
+      setListOutcome(response.outcome);
+      if (response.outcome === "ok") setEmployees(response.data ?? []);
+    } catch {
+      setListOutcome("error");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Refetched on every open rather than cached: a screen that has been sitting
+  // on the dashboard all morning would otherwise show yesterday's check-in
+  // states, and somebody enrolled an hour ago would have no tile at all.
+  useEffect(() => {
+    if (!isOpen) return;
+    loadEmployees(employees === null);
+  }, [isOpen, loadEmployees]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const returnToGrid = useCallback(() => {
+    setView("grid");
+    setSelected(null);
+    setPin("");
+    setPinError(null);
+    setCooldownMs(null);
+    setResult(null);
+    setChoosePinStage("enter");
+    setFirstPin("");
+  }, []);
+
+  // A modal reopened later must never resume somebody else's half-entered PIN.
+  useEffect(() => {
+    if (!isOpen) {
+      returnToGrid();
+      setNameSearch("");
+    }
+  }, [isOpen, returnToGrid]);
+
+  // Alphabetical, so someone's tile stays in the same place day after day - the
+  // API returns them in creation order, which reshuffles whenever a colleague
+  // is added.
+  const sortedEmployees = useMemo(
+    () =>
+      [...(employees ?? [])].sort((a, b) => fullName(a).localeCompare(fullName(b))),
+    [employees]
+  );
+
+  const showNameSearch = sortedEmployees.length > 12;
+
+  const visibleEmployees = useMemo(() => {
+    const term = nameSearch.trim().toLowerCase();
+    if (!term) return sortedEmployees;
+    return sortedEmployees.filter((e) => fullName(e).toLowerCase().includes(term));
+  }, [sortedEmployees, nameSearch]);
+
+  // Ticks the cooldown down to 0, then clears it so the keypad re-enables
+  // itself - no need to back out and re-tap a name once the window has passed.
+  useEffect(() => {
+    if (cooldownMs === null) return;
+    if (cooldownMs <= 0) {
+      setCooldownMs(null);
+      return;
+    }
+    const id = setTimeout(
+      () => setCooldownMs((ms) => (ms !== null ? Math.max(0, ms - 250) : null)),
+      250
+    );
+    return () => clearTimeout(id);
+  }, [cooldownMs]);
+
+  // A success means the person is done and the screen belongs to the machine
+  // again; a failure drops back to the grid so the next attempt costs one tap.
+  useEffect(() => {
+    if (!result) return;
+    const id = setTimeout(() => {
+      if (result.ok) onClose();
+      else returnToGrid();
+    }, result.ok ? 2200 : 2600);
+    return () => clearTimeout(id);
+  }, [result, onClose, returnToGrid]);
+
+  const describeFailure = (outcome: KioskOutcome, message?: string): string => {
+    switch (outcome) {
+      case "unconfigured":
+        return "This terminal is not paired yet - see Settings > Time clock";
+      case "unauthenticated":
+        return "This terminal's access has been revoked - see Settings > Time clock";
+      case "offline":
+        return "No connection - nothing was registered";
+      case "not_found":
+        return "Employee no longer exists";
+      case "no_pin":
+        return "No PIN set for this employee";
+      default:
+        return message ?? "Something went wrong";
+    }
+  };
+
+  const submitClock = async (employee: KioskEmployee, enteredPin: string, pinJustSet: boolean) => {
+    setSubmitting(true);
+
+    const previous =
+      pendingClockEvent.current?.employeeId === employee.id
+        ? pendingClockEvent.current
+        : null;
+    const clockEvent = clockEventIdFor(previous);
+    pendingClockEvent.current = { ...clockEvent, employeeId: employee.id };
+
+    try {
+      const response = await kioskClock(employee.id, enteredPin, clockEvent.id);
+
+      // Anything but a lost request is a decision the handler actually reached,
+      // so this tap is settled. "offline" leaves it pending: the event may or
+      // may not have been written, and reusing the id is what makes the next
+      // attempt safe either way.
+      if (response.outcome !== "offline") pendingClockEvent.current = null;
+
+      if (response.outcome === "ok" && response.data) {
+        const label =
+          response.data.status === "IN"
+            ? "Checked in"
+            : response.data.status === "OUT"
+              ? "Checked out"
+              : "Undone";
+        setResult({
+          ok: true,
+          message: `${response.data.employeeName} - ${label}`,
+          submessage: pinJustSet ? "Your PIN has been saved" : undefined,
+        });
+        setView("result");
+        loadEmployees(false); // refresh grid statuses in the background
+        return;
+      }
+
+      if (response.outcome === "wrong_pin") {
+        // Stay on the PIN screen so the same person can retry immediately,
+        // instead of bouncing back to the grid and re-tapping their name.
+        setPinError("Incorrect PIN");
+        setView("pin");
+        return;
+      }
+
+      if (response.outcome === "cooldown") {
+        setCooldownMs(response.retryAfterMs ?? 10000);
+        setView("pin");
+        return;
+      }
+
+      // The list on this screen and the server disagree about whether a PIN
+      // exists. Both directions are worth recovering from in place rather than
+      // as an error: send them to the screen the server's answer implies, and
+      // refresh the tiles behind them.
+      if (response.outcome === "no_pin") {
+        loadEmployees(false);
+        if (pinJustSet) {
+          // Set moments ago on another screen, so a PIN does exist - ours just
+          // was not the one that won.
+          setPinError("Incorrect PIN");
+          setView("pin");
+        } else {
+          setPin("");
+          setFirstPin("");
+          setChoosePinStage("enter");
+          setPinError(null);
+          setView("choose-pin");
+        }
+        return;
+      }
+
+      setResult({ ok: false, message: describeFailure(response.outcome, response.message) });
+      setView("result");
+    } catch {
+      setResult({ ok: false, message: "Something went wrong" });
+      setView("result");
+    } finally {
+      setSubmitting(false);
+      setPin("");
+    }
+  };
+
+  const savePinThenClock = async (employee: KioskEmployee, chosenPin: string) => {
+    setSubmitting(true);
+    try {
+      const response = await kioskSetInitialPin(employee.id, chosenPin);
+
+      if (response.outcome === "ok") {
+        setSubmitting(false);
+        // Straight on to the clock tap: the person walked up to register their
+        // arrival, not to fill in a form.
+        await submitClock(employee, chosenPin, true);
+        return;
+      }
+
+      // Somebody already set one - either this person on another screen, or the
+      // list on this screen is stale. Either way the keypad is the right answer.
+      if (response.message === "PIN already set") {
+        setChoosePinStage("enter");
+        setFirstPin("");
+        setPin("");
+        setPinError("A PIN already exists for this person - enter it");
+        setView("pin");
+        loadEmployees(false);
+        return;
+      }
+
+      setResult({ ok: false, message: describeFailure(response.outcome, response.message) });
+      setView("result");
+    } catch {
+      setResult({ ok: false, message: "Something went wrong" });
+      setView("result");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const selectEmployee = (employee: KioskEmployee) => {
+    setSelected(employee);
+    setPin("");
+    setPinError(null);
+    setCooldownMs(null);
+    setFirstPin("");
+    setChoosePinStage("enter");
+    setView(employee.hasPin ? "pin" : "choose-pin");
+  };
+
+  const handleDigit = (digit: string) => {
+    if (submitting || cooldownMs !== null || pin.length >= 4) return;
+    setPinError(null);
+    const next = pin + digit;
+    setPin(next);
+
+    if (next.length < 4 || !selected) return;
+
+    if (view === "pin") {
+      submitClock(selected, next, false);
+      return;
+    }
+
+    // choose-pin: first entry is remembered, the second has to match it.
+    if (choosePinStage === "enter") {
+      setFirstPin(next);
+      setChoosePinStage("confirm");
+      setPin("");
+      return;
+    }
+
+    if (next === firstPin) {
+      setPin("");
+      savePinThenClock(selected, next);
+    } else {
+      setPin("");
+      setFirstPin("");
+      setChoosePinStage("enter");
+      setPinError("The two PINs did not match - try again");
+    }
+  };
+
+  const handleBackspace = () => {
+    if (submitting) return;
+    setPinError(null);
+    setPin((p) => p.slice(0, -1));
+  };
+
+  const keypadDisabled = submitting || cooldownMs !== null;
+
+  const renderKeypad = () => (
+    <SimpleGrid columns={3} spacing={4} width="100%" maxW="420px">
+      {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
+        <Button
+          key={digit}
+          height="80px"
+          fontSize="32px"
+          bg="whiteAlpha.200"
+          color="white"
+          _hover={{ bg: "whiteAlpha.300" }}
+          _active={{ bg: "whiteAlpha.400" }}
+          isDisabled={keypadDisabled}
+          onClick={() => handleDigit(digit)}
+        >
+          {digit}
+        </Button>
+      ))}
+      <Box />
+      <Button
+        height="80px"
+        fontSize="32px"
+        bg="whiteAlpha.200"
+        color="white"
+        _hover={{ bg: "whiteAlpha.300" }}
+        _active={{ bg: "whiteAlpha.400" }}
+        isDisabled={keypadDisabled}
+        onClick={() => handleDigit("0")}
+      >
+        0
+      </Button>
+      <Button
+        height="80px"
+        fontSize="28px"
+        bg="whiteAlpha.100"
+        color="white"
+        _hover={{ bg: "whiteAlpha.200" }}
+        isDisabled={keypadDisabled || pin.length === 0}
+        onClick={handleBackspace}
+        aria-label="Backspace"
+      >
+        <Icon as={BsArrowLeft} />
+      </Button>
+    </SimpleGrid>
+  );
+
+  const renderPinDots = () => (
+    <Flex gap={4} mb={2}>
+      {[0, 1, 2, 3].map((i) => (
+        <Circle
+          key={i}
+          size="20px"
+          bg={i < pin.length ? "brand.400" : "transparent"}
+          border="2px solid"
+          borderColor={pinError ? "red.400" : "whiteAlpha.500"}
+        />
+      ))}
+    </Flex>
+  );
+
+  const renderHeader = (title: string, subtitle?: string) => (
+    <Flex direction="column" align="center" mb={6}>
+      {selected && (
+        <Circle
+          size="88px"
+          bg={avatarColorFor(fullName(selected))}
+          color="white"
+          fontSize="34px"
+          fontWeight="bold"
+          mb={4}
+        >
+          {initialsFor(selected.firstName, selected.lastName)}
+        </Circle>
+      )}
+      <Heading size="lg" color="white" textAlign="center">
+        {title}
+      </Heading>
+      {subtitle && (
+        <Text color="whiteAlpha.700" fontSize="lg" mt={2} textAlign="center">
+          {subtitle}
+        </Text>
+      )}
+    </Flex>
+  );
+
+  const renderBackButton = () => (
+    <Button
+      leftIcon={<Icon as={BsArrowLeft} />}
+      variant="ghost"
+      color="whiteAlpha.800"
+      _hover={{ bg: "whiteAlpha.200" }}
+      size="lg"
+      onClick={returnToGrid}
+      isDisabled={submitting}
+    >
+      Back
+    </Button>
+  );
+
+  const renderGrid = () => {
+    if (loading && employees === null) {
+      return (
+        <Flex height="100%" align="center" justify="center">
+          <Spinner size="xl" color="brand.400" thickness="4px" />
+        </Flex>
+      );
+    }
+
+    if (listOutcome !== "ok") {
+      return (
+        <Flex height="100%" align="center" justify="center" direction="column" px={10}>
+          <Heading size="lg" color="white" mb={4} textAlign="center">
+            {listOutcome === "unconfigured"
+              ? "This terminal is not paired yet"
+              : listOutcome === "unauthenticated"
+                ? "This terminal's access has been revoked"
+                : listOutcome === "offline"
+                  ? "No connection"
+                  : "Could not load the employee list"}
+          </Heading>
+          <Text color="whiteAlpha.700" fontSize="xl" textAlign="center" maxW="700px">
+            {listOutcome === "unconfigured" || listOutcome === "unauthenticated"
+              ? "Open Settings > Time clock and paste the kiosk setup link from the Exalise dashboard (Time management > Kiosk devices)."
+              : "Check the network connection and try again."}
+          </Text>
+          <Button
+            mt={8}
+            size="lg"
+            colorScheme="brand"
+            leftIcon={<Icon as={MdRefresh} />}
+            onClick={() => loadEmployees(true)}
+            isLoading={loading}
+          >
+            Try again
+          </Button>
+        </Flex>
+      );
+    }
+
+    if (sortedEmployees.length === 0) {
+      return (
+        <Flex height="100%" align="center" justify="center" direction="column">
+          <Heading size="lg" color="white" mb={3}>
+            No employees yet
+          </Heading>
+          <Text color="whiteAlpha.700" fontSize="xl">
+            Add them in the Exalise dashboard first.
+          </Text>
+        </Flex>
+      );
+    }
+
+    return (
+      <Box>
+        <Flex align="center" mb={6} gap={4}>
+          <Heading size="lg" color="white">
+            Who is clocking in or out?
+          </Heading>
+          {showNameSearch && (
+            <InputGroup maxW="360px" ml="auto">
+              <InputLeftElement height="56px" pointerEvents="none">
+                <Icon as={MdSearch} color="whiteAlpha.600" boxSize="22px" />
+              </InputLeftElement>
+              <Input
+                size="lg"
+                placeholder="Search name"
+                bg="whiteAlpha.100"
+                color="white"
+                border="none"
+                _placeholder={{ color: "whiteAlpha.500" }}
+                value={nameSearch}
+                onChange={(e) => setNameSearch(e.target.value)}
+              />
+            </InputGroup>
+          )}
+          <IconButton
+            ml={showNameSearch ? 0 : "auto"}
+            aria-label="Refresh"
+            icon={<Icon as={MdRefresh} boxSize="26px" />}
+            size="lg"
+            bg="whiteAlpha.200"
+            color="white"
+            _hover={{ bg: "whiteAlpha.300" }}
+            isLoading={loading}
+            onClick={() => loadEmployees(true)}
+          />
+        </Flex>
+
+        <Grid templateColumns="repeat(auto-fill, minmax(240px, 1fr))" gap={5}>
+          {visibleEmployees.map((employee) => (
+            <Flex
+              key={employee.id}
+              as="button"
+              direction="column"
+              align="center"
+              justify="center"
+              bg="whiteAlpha.100"
+              borderRadius="2xl"
+              border="2px solid"
+              borderColor={employee.isCheckedIn ? "#3ecf8e" : "transparent"}
+              py={6}
+              px={4}
+              transition="background 0.15s ease"
+              _hover={{ bg: "whiteAlpha.200" }}
+              _active={{ bg: "whiteAlpha.300" }}
+              onClick={() => selectEmployee(employee)}
+            >
+              <Circle
+                size="72px"
+                bg={avatarColorFor(fullName(employee))}
+                color="white"
+                fontSize="28px"
+                fontWeight="bold"
+                mb={3}
+              >
+                {initialsFor(employee.firstName, employee.lastName)}
+              </Circle>
+              <Text color="white" fontSize="xl" fontWeight="semibold" noOfLines={1}>
+                {employee.firstName}
+              </Text>
+              <Text color="whiteAlpha.700" fontSize="lg" noOfLines={1}>
+                {employee.lastName}
+              </Text>
+              <Text
+                mt={2}
+                fontSize="sm"
+                fontWeight="semibold"
+                color={employee.isCheckedIn ? "#3ecf8e" : "whiteAlpha.500"}
+              >
+                {employee.isCheckedIn ? "CHECKED IN" : "CHECKED OUT"}
+              </Text>
+              {!employee.hasPin && (
+                <Text mt={1} fontSize="sm" color="#ff9f43">
+                  Choose a PIN
+                </Text>
+              )}
+            </Flex>
+          ))}
+        </Grid>
+      </Box>
+    );
+  };
+
+  const renderPinView = () => (
+    <Flex direction="column" align="center" justify="center" height="100%">
+      {renderHeader(
+        selected ? fullName(selected) : "",
+        cooldownMs !== null
+          ? `Just registered - wait ${Math.ceil(cooldownMs / 1000)}s`
+          : "Enter your PIN"
+      )}
+      {renderPinDots()}
+      <Box height="28px" mb={4}>
+        {pinError && (
+          <Text color="red.300" fontSize="lg">
+            {pinError}
+          </Text>
+        )}
+        {submitting && !pinError && <Spinner size="sm" color="brand.400" />}
+      </Box>
+      {renderKeypad()}
+      <Box mt={6}>{renderBackButton()}</Box>
+    </Flex>
+  );
+
+  const renderChoosePinView = () => (
+    <Flex direction="column" align="center" justify="center" height="100%">
+      {renderHeader(
+        selected ? fullName(selected) : "",
+        choosePinStage === "enter"
+          ? "You have no PIN yet - choose a 4-digit PIN"
+          : "Enter the same PIN again to confirm"
+      )}
+      {renderPinDots()}
+      <Box height="28px" mb={4}>
+        {pinError && (
+          <Text color="red.300" fontSize="lg">
+            {pinError}
+          </Text>
+        )}
+        {submitting && !pinError && <Spinner size="sm" color="brand.400" />}
+      </Box>
+      {renderKeypad()}
+      <Text color="whiteAlpha.600" fontSize="md" mt={6} maxW="480px" textAlign="center">
+        You will use this PIN every time you clock in or out. Keep it to yourself.
+      </Text>
+      <Box mt={4}>{renderBackButton()}</Box>
+    </Flex>
+  );
+
+  const renderResultView = () => (
+    <Flex direction="column" align="center" justify="center" height="100%">
+      <Circle size="140px" bg={result?.ok ? "#3ecf8e" : "#ff6b6b"} mb={8}>
+        <Icon as={result?.ok ? MdCheck : MdClose} boxSize="80px" color="white" />
+      </Circle>
+      <Heading size="xl" color="white" textAlign="center" px={10}>
+        {result?.message}
+      </Heading>
+      {result?.submessage && (
+        <Text color="whiteAlpha.700" fontSize="xl" mt={4}>
+          {result.submessage}
+        </Text>
+      )}
+    </Flex>
+  );
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} size="full" motionPreset="none">
+      <ModalOverlay />
+      <ModalContent bg="gray.900" color="white">
+        <ModalCloseButton size="lg" top={5} right={5} zIndex={2} />
+        <ModalBody p={10}>
+          <Box height="calc(100vh - 80px)" overflowY="auto">
+            {view === "grid" && renderGrid()}
+            {view === "pin" && renderPinView()}
+            {view === "choose-pin" && renderChoosePinView()}
+            {view === "result" && renderResultView()}
+          </Box>
+        </ModalBody>
+      </ModalContent>
+    </Modal>
+  );
+};
+
+export default TimeClockModal;

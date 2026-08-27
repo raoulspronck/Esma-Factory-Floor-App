@@ -3,7 +3,7 @@ use tauri::State;
 use crate::config::save_json;
 use crate::error::AppError;
 use crate::models::alerts::{Alert, Alerts};
-use crate::models::settings::{ApiSettings, BasicSettings, ExaliseHttpSettings, ExaliseMqttSettings, RS232Settings};
+use crate::models::settings::{ApiSettings, BasicSettings, ExaliseHttpSettings, ExaliseMqttSettings, KioskSettings, RS232Settings};
 use crate::state::AppState;
 
 // ── Exalise settings ─────────────────────────────────────────────────────────
@@ -97,6 +97,30 @@ pub async fn save_api_settings(
     let mut config = state.config.write().await;
     config.api = ApiSettings { username, password };
     save_json(&path, &config.api)?;
+    Ok("Saved".into())
+}
+
+// ── Kiosk settings ────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn get_kiosk_settings(state: State<'_, AppState>) -> Result<String, AppError> {
+    let path = state.settings_dir.join("kiosk.settings.json");
+    Ok(std::fs::read_to_string(&path).unwrap_or_else(|_| "{}".into()))
+}
+
+#[tauri::command(async)]
+pub async fn save_kiosk_settings(
+    kiosk_key: String,
+    kiosk_secret: String,
+    state: State<'_, AppState>,
+) -> Result<String, AppError> {
+    let path = state.settings_dir.join("kiosk.settings.json");
+    let mut config = state.config.write().await;
+    config.kiosk = KioskSettings {
+        kiosk_key: kiosk_key.trim().to_string(),
+        kiosk_secret: kiosk_secret.trim().to_string(),
+    };
+    save_json(&path, &config.kiosk)?;
     Ok("Saved".into())
 }
 

@@ -22,17 +22,19 @@ use tokio::time::Duration;
 use crate::commands::{
     dashboard::{compute_known_device_keys, frontend_ready, get_dashboard, get_dashboard_data, request_dashboard_refresh, save_dashboard_layout, save_device_to_dashboard, save_widget_to_dashboard},
     devices::{get_device, get_devices, get_last_value, get_own_device, post_remove_cache, test_exalise_connection},
+    kiosk::{kiosk_clock, kiosk_get_employees, kiosk_set_initial_pin},
     misc::{close_splashscreen, get_debiteuren, get_end_answer, get_pdf_file, get_question, get_quiz, log_event, read_log_file, write_to_log_file},
     mqtt::{cancel_shutdown, get_exalise_connection, send_message},
     rs232::{get_all_availble_ports, start_file_receive, start_file_send, stop_file_receive, stop_file_send},
     settings::{
         get_alerts, get_api_settings, get_basic_settings, get_exalise_settings,
-        save_alerts, save_api_settings, save_basic_settings, save_exalise_http_settings,
-        save_exalise_mqtt_settings, save_rs232_settings,
+        get_kiosk_settings, save_alerts, save_api_settings, save_basic_settings,
+        save_exalise_http_settings, save_exalise_mqtt_settings, save_kiosk_settings,
+        save_rs232_settings,
     },
 };
 use crate::config::{load_or_default, paths::{compute_app_data_dir, compute_settings_dir}, save_json};
-use crate::models::settings::{ApiSettings, BasicSettings, ExaliseSettings};
+use crate::models::settings::{ApiSettings, BasicSettings, ExaliseSettings, KioskSettings};
 use crate::services::{cache_persist, log_retention, mqtt_service, rs232_service::start_rs232_monitor};
 use crate::state::{AppConfig, AppState};
 
@@ -60,6 +62,7 @@ async fn main() {
     let exalise: ExaliseSettings = load_or_default(&settings_dir.join("settings.exalise.json"));
     let api: ApiSettings = load_or_default(&settings_dir.join("api.settings.json"));
     let basic: BasicSettings = load_or_default(&settings_dir.join("basic.settings.json"));
+    let kiosk: KioskSettings = load_or_default(&settings_dir.join("kiosk.settings.json"));
 
     // Seed BOTH caches from the previous session so the UI can paint
     // last-known-good readings the instant the window opens, with no network at
@@ -152,7 +155,7 @@ async fn main() {
         dashboard_data_fresh: Arc::new(AtomicBool::new(false)),
         frontend_ready: Arc::new(AtomicBool::new(false)),
         known_device_keys: RwLock::new(known_device_keys),
-        config: RwLock::new(AppConfig { exalise, api, basic }),
+        config: RwLock::new(AppConfig { exalise, api, basic, kiosk }),
         mqtt_connected: mqtt_connected.clone(),
         shutdown_pending: Arc::new(AtomicBool::new(false)),
         settings_dir: settings_dir.clone(),
@@ -297,6 +300,8 @@ async fn main() {
             save_api_settings,
             get_basic_settings,
             save_basic_settings,
+            get_kiosk_settings,
+            save_kiosk_settings,
             get_alerts,
             save_alerts,
             // Devices & values
@@ -325,6 +330,10 @@ async fn main() {
             get_quiz,
             get_question,
             get_end_answer,
+            // Time clock (kiosk)
+            kiosk_get_employees,
+            kiosk_set_initial_pin,
+            kiosk_clock,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

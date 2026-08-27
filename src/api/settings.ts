@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api";
-import { Alert, ApiSettings, BasicSettings, ExaliseSettings } from "../types";
+import { Alert, ApiSettings, BasicSettings, ExaliseSettings, KioskSettings } from "../types";
 
 export async function getExaliseSettings(): Promise<ExaliseSettings> {
   const raw = await invoke<string>("get_exalise_settings");
@@ -44,6 +44,21 @@ export async function getApiSettings(): Promise<ApiSettings> {
 
 export async function saveApiSettings(username: string, password: string): Promise<void> {
   await invoke("save_api_settings", { username, password });
+}
+
+export async function getKioskSettings(): Promise<KioskSettings> {
+  const raw = await invoke<string>("get_kiosk_settings");
+  const parsed = JSON.parse(raw);
+  // The file is `{}` until this terminal has been paired once, so fill in the
+  // shape rather than handing back a half-formed object.
+  return { kiosk_key: parsed.kiosk_key ?? "", kiosk_secret: parsed.kiosk_secret ?? "" };
+}
+
+export async function saveKioskSettings(
+  kiosk_key: string,
+  kiosk_secret: string
+): Promise<void> {
+  await invoke("save_kiosk_settings", { kiosk_key, kiosk_secret });
 }
 
 export async function getBasicSettings(): Promise<BasicSettings> {

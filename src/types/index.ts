@@ -50,6 +50,50 @@ export interface ApiSettings {
   password: string;
 }
 
+/// The kiosk credential pair this terminal clocks people in with, issued from
+/// the Exalise dashboard under "Kiosk devices" - the same pair a wall tablet
+/// gets. Empty strings mean this installation has not been paired yet.
+export interface KioskSettings {
+  kiosk_key: string;
+  kiosk_secret: string;
+}
+
+export interface KioskEmployee {
+  id: string;
+  firstName: string;
+  lastName: string;
+  isCheckedIn: boolean;
+  checkedInSince: string | null;
+  hasPin: boolean;
+}
+
+// The expected failures a terminal has to render differently, named rather
+// than left as HTTP statuses so the screen never has to know how the two
+// backends spell them. See commands/kiosk.rs.
+export type KioskOutcome =
+  | "ok"
+  | "unconfigured"
+  | "unauthenticated"
+  | "wrong_pin"
+  | "no_pin"
+  | "cooldown"
+  | "not_found"
+  | "offline"
+  | "error";
+
+export interface KioskResponse<T> {
+  outcome: KioskOutcome;
+  data?: T;
+  retryAfterMs?: number;
+  message?: string;
+}
+
+export interface KioskClockResult {
+  status: "IN" | "OUT" | "undone" | string;
+  employeeName: string;
+  time: string;
+}
+
 export interface BasicSettings {
   gesture_control: string;
   automatic_load_dashboard: string;
