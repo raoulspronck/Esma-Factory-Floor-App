@@ -19,13 +19,38 @@ import {
   Spinner,
   Text,
 } from "@chakra-ui/react";
+import { listen } from "@tauri-apps/api/event";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BsArrowLeft } from "react-icons/bs";
 import { MdCheck, MdClose, MdRefresh, MdSearch } from "react-icons/md";
 
-import { kioskClock, kioskGetEmployees, kioskSetInitialPin } from "../../../api/kiosk";
-import { KioskEmployee, KioskOutcome } from "../../../types";
+import {
+  kioskClock,
+  kioskGetEmployees,
+  kioskRegisterScreen,
+  kioskSetInitialPin,
+} from "../../../api/kiosk";
+import { getExaliseSettings } from "../../../api/settings";
+import { ClockUpdate, KioskEmployee, KioskOutcome } from "../../../types";
 import { PendingClockEvent, clockEventIdFor } from "../../../utils/clockEventId";
+
+// Datapoint the message handler pushes clock events to this screen under. It
+// arrives on this machine's own device topic, because the broker only ever
+// lets a device subscribe to its own - the fan-out to every terminal happens
+// server side (see kioskScreens.ts in message-handler.exalise.com).
+const TIMECLOCK_DATAPOINT = "exalise-timeclock";
+
+// How often a screen re-announces itself while the time clock is open. Well
+// inside the server's registration TTL, so one missed call does not quietly
+// end the live updates.
+const REGISTER_INTERVAL_MS = 5 * 60 * 1000;
+
+// A push tells us the new state but not always the whole truth - undoing a
+// check-out reopens a session whose original check-in time this screen never
+// saw. So the pushed state is applied at once for the tile, and the list is
+// refetched shortly after to reconcile. Waiting a moment collapses the burst
+// of taps at a shift change into a single fetch.
+const RECONCILE_DELAY_MS = 1500;
 
 // The same avatar palette the web kiosk uses, so a person's tile is the same
 // colour whichever screen they walk up to.
@@ -68,6 +93,11 @@ interface TimeClockModalProps {
  * floor worker does not have. The API only ever accepts a *first* PIN from a
  * terminal credential, never a change, so this cannot be used to take over a
  * colleague's account.
+ *
+ * Nothing here needs configuring. It authenticates with the Exalise
+ * credentials the installation already holds, and while it is open it tells
+ * the server so, which is what makes a tap on the terminal by the saw show up
+ * on the one by the press a moment later.
  */
 const TimeClockModal: React.FC<TimeClockModalProps> = ({ isOpen, onClose }) => {
   const [employees, setEmployees] = useState<KioskEmployee[] | null>(null);
@@ -98,6 +128,13 @@ const TimeClockModal: React.FC<TimeClockModalProps> = ({ isOpen, onClose }) => {
     null
   );
 
+  // This machine's own device key, which is the MQTT topic clock events for
+  // this screen arrive on. Read once and kept for the life of the component -
+  // changing it means changing the Exalise settings, which restarts the app.
+  const [deviceKey, setDeviceKey] = useState<string | null>(null);
+
+  const reconcileTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const loadEmployees = useCallback(async (showSpinner: boolean) => {
     if (showSpinner) setLoading(true);
     try {
@@ -118,6 +155,103 @@ const TimeClockModal: React.FC<TimeClockModalProps> = ({ isOpen, onClose }) => {
     if (!isOpen) return;
     loadEmployees(employees === null);
   }, [isOpen, loadEmployees]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    getExaliseSettings()
+      .then((settings) => setDeviceKey(settings?.mqtt_settings?.device_key ?? null))
+      // A machine with no settings file yet simply gets no live updates; the
+      // list it fetches on open is still correct.
+      .catch(() => setDeviceKey(null));
+  }, []);
+
+  // Announce this screen for as long as the time clock is on it. Registration
+  // lapses on its own, so closing the modal or switching the machine off needs
+  // no counterpart - which is the point: there is nothing to un-configure.
+  useEffect(() => {
+    if (!isOpen) return;
+
+    kioskRegisterScreen().catch(() => undefined);
+    const id = setInterval(
+      () => kioskRegisterScreen().catch(() => undefined),
+      REGISTER_INTERVAL_MS
+    );
+    return () => clearInterval(id);
+  }, [isOpen]);
+
+  /**
+   * Applies a clock event that happened somewhere else, then schedules a
+   * refetch to fill in what the push could not say.
+   *
+   * Deliberately does not touch `selected`, `pin` or the current view: these
+   * arrive while somebody may be halfway through typing their PIN, and a
+   * colleague clocking in two machines away must not throw them back to the
+   * grid.
+   */
+  const applyClockUpdate = useCallback((update: ClockUpdate) => {
+    setEmployees((current) => {
+      if (!current) return current;
+      return current.map((e) =>
+        e.id === update.employeeId
+          ? {
+              ...e,
+              isCheckedIn: update.isCheckedIn,
+              // Only a check-in carries a time this screen can trust. An undo
+              // that reopens a session has an earlier check-in time that was
+              // never sent here, so the old value is kept until the refetch
+              // below corrects it.
+              checkedInSince:
+                update.status === "IN"
+                  ? update.time
+                  : update.isCheckedIn
+                    ? e.checkedInSince
+                    : null,
+            }
+          : e
+      );
+    });
+
+    if (reconcileTimer.current) clearTimeout(reconcileTimer.current);
+    reconcileTimer.current = setTimeout(() => {
+      reconcileTimer.current = null;
+      loadEmployees(false);
+    }, RECONCILE_DELAY_MS);
+  }, [loadEmployees]);
+
+  // Only listened to while the modal is open: the events stop being published
+  // to this screen shortly after it closes anyway, and there is nothing behind
+  // the modal that renders a clock state.
+  useEffect(() => {
+    if (!isOpen || !deviceKey) return;
+
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+
+    listen<string>(
+      `notification---${deviceKey}---${TIMECLOCK_DATAPOINT}`,
+      (event) => {
+        try {
+          applyClockUpdate(JSON.parse(event.payload) as ClockUpdate);
+        } catch {
+          // A payload this screen cannot read is not worth acting on; the
+          // reconcile fetch on the next real event will catch up regardless.
+        }
+      }
+    ).then((fn) => {
+      // The modal can close before the listener is registered, in which case
+      // the cleanup below has already run and has nothing to remove yet.
+      if (cancelled) fn();
+      else unlisten = fn;
+    });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+      if (reconcileTimer.current) {
+        clearTimeout(reconcileTimer.current);
+        reconcileTimer.current = null;
+      }
+    };
+  }, [isOpen, deviceKey, applyClockUpdate]);
 
   const returnToGrid = useCallback(() => {
     setView("grid");
@@ -184,9 +318,9 @@ const TimeClockModal: React.FC<TimeClockModalProps> = ({ isOpen, onClose }) => {
   const describeFailure = (outcome: KioskOutcome, message?: string): string => {
     switch (outcome) {
       case "unconfigured":
-        return "This terminal is not paired yet - see Settings > Time clock";
+        return "No Exalise credentials on this machine - see Settings > Exalise http";
       case "unauthenticated":
-        return "This terminal's access has been revoked - see Settings > Time clock";
+        return "Exalise refused this machine's credentials - see Settings > Exalise http";
       case "offline":
         return "No connection - nothing was registered";
       case "not_found":

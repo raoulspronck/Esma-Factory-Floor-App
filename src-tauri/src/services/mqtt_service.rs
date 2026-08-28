@@ -15,6 +15,14 @@ use crate::state::AppState;
 /// entry plus periodic reminders.
 const ERROR_LOG_INTERVAL: StdDuration = StdDuration::from_secs(5 * 60);
 
+/// Datapoint the message handler pushes time-clock events to this screen
+/// under, so a colleague clocking in at another terminal shows up here at
+/// once. It arrives on this device's own topic and so passes the
+/// `known_device_keys` check below, but it is a notification rather than a
+/// reading: caching it would put an employee's name into last_values and from
+/// there into the on-disk value cache, where nothing ever reads it back.
+const TIMECLOCK_DATAPOINT: &str = "exalise-timeclock";
+
 /// Spawns the MQTT event loop task.
 /// Handles connection, subscriptions, message routing, and window event emission.
 pub fn start_mqtt_loop(
@@ -114,7 +122,9 @@ pub fn start_mqtt_loop(
                                 // devices actually in this dashboard (or this kiosk's
                                 // own master key) into last_values/the disk cache.
                                 let state = app_handle.state::<AppState>();
-                                if state.known_device_keys.read().await.contains(msg_device_key) {
+                                if datapoint_key != TIMECLOCK_DATAPOINT
+                                    && state.known_device_keys.read().await.contains(msg_device_key)
+                                {
                                     state.update_last_value(&cache_key, &payload).await;
                                 }
                             }

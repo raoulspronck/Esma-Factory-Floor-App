@@ -50,14 +50,6 @@ export interface ApiSettings {
   password: string;
 }
 
-/// The kiosk credential pair this terminal clocks people in with, issued from
-/// the Exalise dashboard under "Kiosk devices" - the same pair a wall tablet
-/// gets. Empty strings mean this installation has not been paired yet.
-export interface KioskSettings {
-  kiosk_key: string;
-  kiosk_secret: string;
-}
-
 export interface KioskEmployee {
   id: string;
   firstName: string;
@@ -92,6 +84,24 @@ export interface KioskClockResult {
   status: "IN" | "OUT" | "undone" | string;
   employeeName: string;
   time: string;
+}
+
+// One clock event as it arrives over MQTT, pushed by the message handler to
+// every terminal currently showing the time clock so a tap on one screen is
+// visible on the rest without anyone refreshing. Mirrors `ClockUpdate` in
+// message-handler.exalise.com's utils/kioskScreens.ts.
+export interface ClockUpdate {
+  employeeId: string;
+  employeeName: string;
+  status: "IN" | "OUT" | "undone";
+  // The state the employee ends up in, which is what a tile renders. Sent
+  // rather than derived, so "undone" does not have to be interpreted here.
+  isCheckedIn: boolean;
+  time: string;
+  // Audit sentinel of whatever submitted it: "KIOSK", "REMOTE-APP", or an RFID
+  // card UID. Not displayed - it is here so a screen could tell its own taps
+  // from somebody else's if that ever became useful.
+  source: string;
 }
 
 export interface BasicSettings {

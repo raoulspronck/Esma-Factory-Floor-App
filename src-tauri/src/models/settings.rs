@@ -85,35 +85,6 @@ impl Default for ApiSettings {
     }
 }
 
-/// The kiosk credential pair this terminal clocks people in with, issued from
-/// the Exalise dashboard ("Kiosk devices") exactly like a wall tablet's. Kept
-/// in its own file rather than folded into ExaliseSettings because it is a
-/// different tenant-scoped credential with a different lifetime - revoking a
-/// terminal's clock-in rights must not disturb its MQTT/HTTP monitoring keys.
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct KioskSettings {
-    pub kiosk_key: String,
-    pub kiosk_secret: String,
-}
-
-impl Default for KioskSettings {
-    fn default() -> Self {
-        KioskSettings {
-            kiosk_key: "".into(),
-            kiosk_secret: "".into(),
-        }
-    }
-}
-
-impl KioskSettings {
-    /// Whether this installation has been paired at all. The time-clock button
-    /// is still shown when it hasn't - the modal explains what to do rather
-    /// than the button silently going missing on a factory floor screen.
-    pub fn is_configured(&self) -> bool {
-        !self.kiosk_key.is_empty() && !self.kiosk_secret.is_empty()
-    }
-}
-
 fn default_dashboard_rows() -> u32 {
     7
 }

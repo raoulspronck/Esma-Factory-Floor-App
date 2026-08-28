@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, Notify, RwLock};
 use rumqttc::AsyncClient;
 
-use crate::models::settings::{ApiSettings, BasicSettings, ExaliseSettings, KioskSettings};
+use crate::models::settings::{ApiSettings, BasicSettings, ExaliseSettings};
 
 /// All runtime state in one place, managed by Tauri.
 pub struct AppState {
@@ -66,7 +66,6 @@ pub struct AppConfig {
     pub exalise: ExaliseSettings,
     pub api: ApiSettings,
     pub basic: BasicSettings,
-    pub kiosk: KioskSettings,
 }
 
 impl AppState {

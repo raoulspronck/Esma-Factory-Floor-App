@@ -9,8 +9,17 @@ const MESSAGE_HANDLER: &str = "https://message-handler.exalise.com";
 
 // Why the network layer lives in Rust rather than `fetch` in the webview:
 // every other outbound call in this app already does, the reqwest client is
-// shared and carries the 20s timeout, and it keeps the kiosk secret out of
-// anything the webview can read back.
+// shared and carries the 20s timeout, and it keeps the secret out of anything
+// the webview can read back.
+//
+// The credentials are the ones this installation was already provisioned with
+// - the `x-api-key`/`x-api-secret` pair every other call in devices.rs and
+// dashboard.rs sends, plus the master device key identifying this screen.
+// There is deliberately no separate time-clock credential: pairing a dozen
+// floor screens by hand was the entire reason the feature went unused, and
+// both backends now accept this pair for the kiosk endpoints (see
+// isAuthKioskTerminal.ts in api.exalise.com and isAuthKiosk.ts in the message
+// handler). A screen that can already talk to Exalise can clock people in.
 
 /// One employee tile on the terminal. Mirrors `KioskEmployee` in
 /// api.exalise.com's KioskResolver - deliberately no more than a name, a
@@ -88,18 +97,47 @@ pub struct KioskClockResult {
     pub time: String,
 }
 
-/// Reads the credential pair out of config and drops the lock again, so a
-/// clock request that hangs on the network never blocks a settings save.
-async fn kiosk_headers(state: &State<'_, AppState>) -> Option<(String, String)> {
+/// The credentials this screen presents, read out of config so the lock is
+/// dropped again before any network call - a clock request that hangs must
+/// never block a settings save.
+///
+/// `None` means the installation has not had its Exalise credentials filled in
+/// at all, which is the same condition that stops the dashboard working; the
+/// time clock says so rather than failing as if the login were wrong.
+struct KioskCredentials {
+    http_key: String,
+    http_secret: String,
+    /// Which screen this is. Sent so the server can push clock events made on
+    /// the other terminals back to this one over MQTT.
+    device_key: String,
+}
+
+async fn kiosk_credentials(state: &State<'_, AppState>) -> Option<KioskCredentials> {
     let config = state.config.read().await;
-    if !config.kiosk.is_configured() {
+    let http = &config.exalise.http_settings;
+    let device_key = config.exalise.mqtt_settings.device_key.clone();
+
+    // The defaults are the literal placeholder strings ExaliseHttpSettings
+    // ships with, so a machine nobody has configured yet is caught here
+    // instead of spending a round trip to be told it is unauthenticated.
+    if http.http_key.is_empty()
+        || http.http_secret.is_empty()
+        || http.http_key == "http_key"
+        || http.http_secret == "http_secret"
+    {
         return None;
     }
-    Some((config.kiosk.kiosk_key.clone(), config.kiosk.kiosk_secret.clone()))
+
+    Some(KioskCredentials {
+        http_key: http.http_key.clone(),
+        http_secret: http.http_secret.clone(),
+        device_key,
+    })
 }
 
 /// True when a GraphQL reply carries the API's UNAUTHENTICATED error, which
-/// `isAuthKiosk` throws for a bad, deleted or revoked token alike.
+/// `isAuthKioskTerminal` throws for a bad, deleted or revoked credential
+/// alike, and also for a licence without the time management product.
 fn is_unauthenticated(json: &serde_json::Value) -> bool {
     json.get("errors")
         .and_then(|e| e.as_array())
@@ -115,8 +153,8 @@ fn is_unauthenticated(json: &serde_json::Value) -> bool {
 pub async fn kiosk_get_employees(
     state: State<'_, AppState>,
 ) -> Result<KioskResponse<Vec<KioskEmployee>>, AppError> {
-    let (key, secret) = match kiosk_headers(&state).await {
-        Some(pair) => pair,
+    let credentials = match kiosk_credentials(&state).await {
+        Some(c) => c,
         None => return Ok(KioskResponse::fail("unconfigured")),
     };
 
@@ -127,8 +165,9 @@ pub async fn kiosk_get_employees(
     let response = match state
         .http_client
         .post(EXALISE_GRAPHQL)
-        .header("x-kiosk-key", &key)
-        .header("x-kiosk-secret", &secret)
+        .header("x-api-key", &credentials.http_key)
+        .header("x-api-secret", &credentials.http_secret)
+        .header("x-master-device-key", &credentials.device_key)
         .json(&body)
         .send()
         .await
@@ -168,8 +207,8 @@ pub async fn kiosk_set_initial_pin(
     pin: String,
     state: State<'_, AppState>,
 ) -> Result<KioskResponse<()>, AppError> {
-    let (key, secret) = match kiosk_headers(&state).await {
-        Some(pair) => pair,
+    let credentials = match kiosk_credentials(&state).await {
+        Some(c) => c,
         None => return Ok(KioskResponse::fail("unconfigured")),
     };
 
@@ -181,8 +220,9 @@ pub async fn kiosk_set_initial_pin(
     let response = match state
         .http_client
         .post(EXALISE_GRAPHQL)
-        .header("x-kiosk-key", &key)
-        .header("x-kiosk-secret", &secret)
+        .header("x-api-key", &credentials.http_key)
+        .header("x-api-secret", &credentials.http_secret)
+        .header("x-master-device-key", &credentials.device_key)
         .json(&body)
         .send()
         .await
@@ -233,8 +273,8 @@ pub async fn kiosk_clock(
     client_event_id: String,
     state: State<'_, AppState>,
 ) -> Result<KioskResponse<KioskClockResult>, AppError> {
-    let (key, secret) = match kiosk_headers(&state).await {
-        Some(pair) => pair,
+    let credentials = match kiosk_credentials(&state).await {
+        Some(c) => c,
         None => return Ok(KioskResponse::fail("unconfigured")),
     };
 
@@ -247,8 +287,9 @@ pub async fn kiosk_clock(
     let response = match state
         .http_client
         .post(format!("{}/api/kiosk/clock", MESSAGE_HANDLER))
-        .header("x-kiosk-key", &key)
-        .header("x-kiosk-secret", &secret)
+        .header("x-api-key", &credentials.http_key)
+        .header("x-api-secret", &credentials.http_secret)
+        .header("x-master-device-key", &credentials.device_key)
         .json(&body)
         .send()
         .await
@@ -299,4 +340,46 @@ pub async fn kiosk_clock(
         }),
         _ => Ok(KioskResponse::fail("error")),
     }
+}
+
+/// Tells the message handler this screen is showing the time clock, so clock
+/// events made on the *other* terminals are pushed here over MQTT while it
+/// stays open.
+///
+/// This is the whole of the live-sync setup on the client side. The screens
+/// cannot subscribe to each other directly - a device's broker ACL only ever
+/// covers its own key - so the server fans a clock event out to one topic per
+/// registered screen, and this is how a screen gets onto that list. The
+/// registration lapses by itself, so nothing has to be unregistered when the
+/// modal closes or the machine is switched off.
+///
+/// Returns whether the screen is now receiving live updates. `false` is not an
+/// error: a machine with no device key configured still clocks people in
+/// perfectly well, it just will not hear about taps made elsewhere until the
+/// list is refetched.
+#[tauri::command(async)]
+pub async fn kiosk_register_screen(state: State<'_, AppState>) -> Result<bool, AppError> {
+    let credentials = match kiosk_credentials(&state).await {
+        Some(c) => c,
+        None => return Ok(false),
+    };
+
+    if credentials.device_key.is_empty() || credentials.device_key == "device_key" {
+        return Ok(false);
+    }
+
+    let response = state
+        .http_client
+        .post(format!("{}/api/kiosk/screen", MESSAGE_HANDLER))
+        .header("x-api-key", &credentials.http_key)
+        .header("x-api-secret", &credentials.http_secret)
+        .header("x-master-device-key", &credentials.device_key)
+        .json(&serde_json::json!({}))
+        .send()
+        .await;
+
+    // Deliberately swallowed. Registration is an optimisation on top of a list
+    // the screen refetches anyway; a terminal that cannot reach the message
+    // handler must still show its employee tiles and take a PIN.
+    Ok(matches!(response, Ok(r) if r.status().is_success()))
 }

@@ -2,13 +2,12 @@ import { Flex, Icon, Menu, MenuButton, MenuItem, MenuList, Text, useDisclosure }
 import { invoke } from "@tauri-apps/api";
 import { ElementType, useEffect, useRef, useState } from "react";
 import { AiOutlineApi, AiOutlineCloudUpload, AiOutlineSetting, AiOutlineUsb } from "react-icons/ai";
-import { MdAccessTime, MdOutlineNetworkCheck } from "react-icons/md";
+import { MdOutlineNetworkCheck } from "react-icons/md";
 
 import EsmaApiSettingsModal from "../SettingsMenu/esmaApiSettingsModal";
 import ExaliseHttpSettingModal from "../SettingsMenu/exaliseHttpSettingModal";
 import ExaliseSettingModal from "../SettingsMenu/exaliseSettingModal";
 import GeneralSettingsModal from "../SettingsMenu/generalSettingsModal";
-import KioskSettingsModal from "../SettingsMenu/kioskSettingsModal";
 import SerialPortSettingModal from "../SettingsMenu/serialPortSettingModal";
 import TestConnectionModal from "../SettingsMenu/testConnectionModal";
 
@@ -19,7 +18,6 @@ export default function SettingsMenu() {
   const { isOpen: isOpenApi, onOpen: onOpenApi, onClose: onCloseApi } = useDisclosure();
   const { isOpen: isOpenGeneral, onOpen: onOpenGeneral, onClose: onCloseGeneral } = useDisclosure();
   const { isOpen: isOpenTest, onOpen: onOpenTest, onClose: onCloseTest } = useDisclosure();
-  const { isOpen: isOpenKiosk, onOpen: onOpenKiosk, onClose: onCloseKiosk } = useDisclosure();
 
   // RS232 form state
   const [port, setPort] = useState("");
@@ -40,10 +38,6 @@ export default function SettingsMenu() {
   // API form state
   const [apiUsername, setApiUsername] = useState("");
   const [apiPassword, setApiPassword] = useState("");
-
-  // Time clock (kiosk) form state
-  const [kioskKey, setKioskKey] = useState("");
-  const [kioskSecret, setKioskSecret] = useState("");
 
   // General / basic settings form state
   const [gestureControl, setGestureControl] = useState("");
@@ -76,14 +70,6 @@ export default function SettingsMenu() {
         const res = JSON.parse(e as string);
         setApiUsername(res.username);
         setApiPassword(res.password);
-      })
-      .catch(console.log);
-
-    invoke("get_kiosk_settings")
-      .then((e) => {
-        const res = JSON.parse(e as string);
-        setKioskKey(res.kiosk_key ?? "");
-        setKioskSecret(res.kiosk_secret ?? "");
       })
       .catch(console.log);
 
@@ -186,18 +172,6 @@ export default function SettingsMenu() {
           isOpen={isOpenApi} onClose={onCloseApi}
           apiUsername={apiUsername} setApiUsername={setApiUsername}
           apiPassword={apiPassword} setApiPassword={setApiPassword}
-        />
-
-        <MenuItem onClick={onOpenKiosk} minH="60px">
-          <Flex alignItems="center" width="100%" gap={3}>
-            {itemIcon(MdAccessTime)}
-            <Text>Time clock</Text>
-          </Flex>
-        </MenuItem>
-        <KioskSettingsModal
-          isOpen={isOpenKiosk} onClose={onCloseKiosk}
-          kioskKey={kioskKey} setKioskKey={setKioskKey}
-          kioskSecret={kioskSecret} setKioskSecret={setKioskSecret}
         />
 
         <MenuItem onClick={onOpenGeneral} minH="60px">
