@@ -52,6 +52,19 @@ const REGISTER_INTERVAL_MS = 5 * 60 * 1000;
 // of taps at a shift change into a single fetch.
 const RECONCILE_DELAY_MS = 1500;
 
+// Floor under every view, so the dialog does not snap between wildly different
+// sizes as somebody moves from the name grid to the keypad and on to the
+// result. Roughly the height of the two-row grid, which is the view it opens
+// on and the one it spends most of its time showing.
+//
+// Sizes throughout this file are set for a wall-mounted touchscreen operated
+// with work gloves and dirty hands, not a mouse: anything tappable - a name
+// tile, a keypad key, Back - is deliberately far larger than a desktop
+// control would be. Decoration (the avatar above the keypad, status labels)
+// stays modest, because every pixel it takes is a pixel the keypad loses on a
+// 768px-tall screen.
+const VIEW_MIN_HEIGHT = "480px";
+
 // The same avatar palette the web kiosk uses, so a person's tile is the same
 // colour whichever screen they walk up to.
 const AVATAR_COLORS = ["#439be3", "#3ecf8e", "#a374ff", "#ff9f43", "#ff6b6b"];
@@ -500,12 +513,12 @@ const TimeClockModal: React.FC<TimeClockModalProps> = ({ isOpen, onClose }) => {
   const keypadDisabled = submitting || cooldownMs !== null;
 
   const renderKeypad = () => (
-    <SimpleGrid columns={3} spacing={4} width="100%" maxW="420px">
+    <SimpleGrid columns={3} spacing={3} width="100%" maxW="380px">
       {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
         <Button
           key={digit}
-          height="80px"
-          fontSize="32px"
+          height="88px"
+          fontSize="34px"
           bg="whiteAlpha.200"
           color="white"
           _hover={{ bg: "whiteAlpha.300" }}
@@ -518,8 +531,8 @@ const TimeClockModal: React.FC<TimeClockModalProps> = ({ isOpen, onClose }) => {
       ))}
       <Box />
       <Button
-        height="80px"
-        fontSize="32px"
+        height="88px"
+        fontSize="34px"
         bg="whiteAlpha.200"
         color="white"
         _hover={{ bg: "whiteAlpha.300" }}
@@ -530,8 +543,8 @@ const TimeClockModal: React.FC<TimeClockModalProps> = ({ isOpen, onClose }) => {
         0
       </Button>
       <Button
-        height="80px"
-        fontSize="28px"
+        height="88px"
+        fontSize="30px"
         bg="whiteAlpha.100"
         color="white"
         _hover={{ bg: "whiteAlpha.200" }}
@@ -549,7 +562,7 @@ const TimeClockModal: React.FC<TimeClockModalProps> = ({ isOpen, onClose }) => {
       {[0, 1, 2, 3].map((i) => (
         <Circle
           key={i}
-          size="20px"
+          size="24px"
           bg={i < pin.length ? "brand.400" : "transparent"}
           border="2px solid"
           borderColor={pinError ? "red.400" : "whiteAlpha.500"}
@@ -559,15 +572,15 @@ const TimeClockModal: React.FC<TimeClockModalProps> = ({ isOpen, onClose }) => {
   );
 
   const renderHeader = (title: string, subtitle?: string) => (
-    <Flex direction="column" align="center" mb={6}>
+    <Flex direction="column" align="center" mb={4}>
       {selected && (
         <Circle
-          size="88px"
+          size="64px"
           bg={avatarColorFor(fullName(selected))}
           color="white"
-          fontSize="34px"
+          fontSize="26px"
           fontWeight="bold"
-          mb={4}
+          mb={3}
         >
           {initialsFor(selected.firstName, selected.lastName)}
         </Circle>
@@ -576,7 +589,7 @@ const TimeClockModal: React.FC<TimeClockModalProps> = ({ isOpen, onClose }) => {
         {title}
       </Heading>
       {subtitle && (
-        <Text color="whiteAlpha.700" fontSize="lg" mt={2} textAlign="center">
+        <Text color="whiteAlpha.700" fontSize="md" mt={1} textAlign="center">
           {subtitle}
         </Text>
       )}
@@ -600,7 +613,7 @@ const TimeClockModal: React.FC<TimeClockModalProps> = ({ isOpen, onClose }) => {
   const renderGrid = () => {
     if (loading && employees === null) {
       return (
-        <Flex height="100%" align="center" justify="center">
+        <Flex minH={VIEW_MIN_HEIGHT} align="center" justify="center">
           <Spinner size="xl" color="brand.400" thickness="4px" />
         </Flex>
       );
@@ -608,23 +621,23 @@ const TimeClockModal: React.FC<TimeClockModalProps> = ({ isOpen, onClose }) => {
 
     if (listOutcome !== "ok") {
       return (
-        <Flex height="100%" align="center" justify="center" direction="column" px={10}>
-          <Heading size="lg" color="white" mb={4} textAlign="center">
+        <Flex minH={VIEW_MIN_HEIGHT} align="center" justify="center" direction="column" px={6}>
+          <Heading size="lg" color="white" mb={3} textAlign="center">
             {listOutcome === "unconfigured"
-              ? "This terminal is not paired yet"
+              ? "No Exalise credentials on this machine"
               : listOutcome === "unauthenticated"
-                ? "This terminal's access has been revoked"
+                ? "Exalise refused this machine's credentials"
                 : listOutcome === "offline"
                   ? "No connection"
                   : "Could not load the employee list"}
           </Heading>
-          <Text color="whiteAlpha.700" fontSize="xl" textAlign="center" maxW="700px">
+          <Text color="whiteAlpha.700" fontSize="lg" textAlign="center" maxW="560px">
             {listOutcome === "unconfigured" || listOutcome === "unauthenticated"
-              ? "Open Settings > Time clock and paste the kiosk setup link from the Exalise dashboard (Time management > Kiosk devices)."
+              ? "Open Settings > Exalise http and check this machine's API key and secret. There is no separate time clock login any more."
               : "Check the network connection and try again."}
           </Text>
           <Button
-            mt={8}
+            mt={6}
             size="lg"
             colorScheme="brand"
             leftIcon={<Icon as={MdRefresh} />}
@@ -639,11 +652,11 @@ const TimeClockModal: React.FC<TimeClockModalProps> = ({ isOpen, onClose }) => {
 
     if (sortedEmployees.length === 0) {
       return (
-        <Flex height="100%" align="center" justify="center" direction="column">
-          <Heading size="lg" color="white" mb={3}>
+        <Flex minH={VIEW_MIN_HEIGHT} align="center" justify="center" direction="column">
+          <Heading size="lg" color="white" mb={2}>
             No employees yet
           </Heading>
-          <Text color="whiteAlpha.700" fontSize="xl">
+          <Text color="whiteAlpha.700" fontSize="lg">
             Add them in the Exalise dashboard first.
           </Text>
         </Flex>
@@ -652,13 +665,13 @@ const TimeClockModal: React.FC<TimeClockModalProps> = ({ isOpen, onClose }) => {
 
     return (
       <Box>
-        <Flex align="center" mb={6} gap={4}>
+        <Flex align="center" mb={4} gap={3}>
           <Heading size="lg" color="white">
             Who is clocking in or out?
           </Heading>
           {showNameSearch && (
-            <InputGroup maxW="360px" ml="auto">
-              <InputLeftElement height="56px" pointerEvents="none">
+            <InputGroup maxW="280px" ml="auto">
+              <InputLeftElement height="48px" pointerEvents="none">
                 <Icon as={MdSearch} color="whiteAlpha.600" boxSize="22px" />
               </InputLeftElement>
               <Input
@@ -686,7 +699,7 @@ const TimeClockModal: React.FC<TimeClockModalProps> = ({ isOpen, onClose }) => {
           />
         </Flex>
 
-        <Grid templateColumns="repeat(auto-fill, minmax(240px, 1fr))" gap={5}>
+        <Grid templateColumns="repeat(auto-fill, minmax(190px, 1fr))" gap={4}>
           {visibleEmployees.map((employee) => (
             <Flex
               key={employee.id}
@@ -698,7 +711,7 @@ const TimeClockModal: React.FC<TimeClockModalProps> = ({ isOpen, onClose }) => {
               borderRadius="2xl"
               border="2px solid"
               borderColor={employee.isCheckedIn ? "#3ecf8e" : "transparent"}
-              py={6}
+              py={5}
               px={4}
               transition="background 0.15s ease"
               _hover={{ bg: "whiteAlpha.200" }}
@@ -715,7 +728,7 @@ const TimeClockModal: React.FC<TimeClockModalProps> = ({ isOpen, onClose }) => {
               >
                 {initialsFor(employee.firstName, employee.lastName)}
               </Circle>
-              <Text color="white" fontSize="xl" fontWeight="semibold" noOfLines={1}>
+              <Text color="white" fontSize="2xl" fontWeight="semibold" noOfLines={1}>
                 {employee.firstName}
               </Text>
               <Text color="whiteAlpha.700" fontSize="lg" noOfLines={1}>
@@ -742,7 +755,7 @@ const TimeClockModal: React.FC<TimeClockModalProps> = ({ isOpen, onClose }) => {
   };
 
   const renderPinView = () => (
-    <Flex direction="column" align="center" justify="center" height="100%">
+    <Flex direction="column" align="center" justify="center" minH={VIEW_MIN_HEIGHT}>
       {renderHeader(
         selected ? fullName(selected) : "",
         cooldownMs !== null
@@ -750,21 +763,21 @@ const TimeClockModal: React.FC<TimeClockModalProps> = ({ isOpen, onClose }) => {
           : "Enter your PIN"
       )}
       {renderPinDots()}
-      <Box height="28px" mb={4}>
+      <Box height="28px" mb={3}>
         {pinError && (
-          <Text color="red.300" fontSize="lg">
+          <Text color="red.300" fontSize="md">
             {pinError}
           </Text>
         )}
         {submitting && !pinError && <Spinner size="sm" color="brand.400" />}
       </Box>
       {renderKeypad()}
-      <Box mt={6}>{renderBackButton()}</Box>
+      <Box mt={4}>{renderBackButton()}</Box>
     </Flex>
   );
 
   const renderChoosePinView = () => (
-    <Flex direction="column" align="center" justify="center" height="100%">
+    <Flex direction="column" align="center" justify="center" minH={VIEW_MIN_HEIGHT}>
       {renderHeader(
         selected ? fullName(selected) : "",
         choosePinStage === "enter"
@@ -772,32 +785,32 @@ const TimeClockModal: React.FC<TimeClockModalProps> = ({ isOpen, onClose }) => {
           : "Enter the same PIN again to confirm"
       )}
       {renderPinDots()}
-      <Box height="28px" mb={4}>
+      <Box height="28px" mb={3}>
         {pinError && (
-          <Text color="red.300" fontSize="lg">
+          <Text color="red.300" fontSize="md">
             {pinError}
           </Text>
         )}
         {submitting && !pinError && <Spinner size="sm" color="brand.400" />}
       </Box>
       {renderKeypad()}
-      <Text color="whiteAlpha.600" fontSize="md" mt={6} maxW="480px" textAlign="center">
+      <Text color="whiteAlpha.600" fontSize="sm" mt={4} maxW="380px" textAlign="center">
         You will use this PIN every time you clock in or out. Keep it to yourself.
       </Text>
-      <Box mt={4}>{renderBackButton()}</Box>
+      <Box mt={2}>{renderBackButton()}</Box>
     </Flex>
   );
 
   const renderResultView = () => (
-    <Flex direction="column" align="center" justify="center" height="100%">
-      <Circle size="140px" bg={result?.ok ? "#3ecf8e" : "#ff6b6b"} mb={8}>
-        <Icon as={result?.ok ? MdCheck : MdClose} boxSize="80px" color="white" />
+    <Flex direction="column" align="center" justify="center" minH={VIEW_MIN_HEIGHT}>
+      <Circle size="128px" bg={result?.ok ? "#3ecf8e" : "#ff6b6b"} mb={6}>
+        <Icon as={result?.ok ? MdCheck : MdClose} boxSize="72px" color="white" />
       </Circle>
-      <Heading size="xl" color="white" textAlign="center" px={10}>
+      <Heading size="xl" color="white" textAlign="center" px={8}>
         {result?.message}
       </Heading>
       {result?.submessage && (
-        <Text color="whiteAlpha.700" fontSize="xl" mt={4}>
+        <Text color="whiteAlpha.700" fontSize="lg" mt={3}>
           {result.submessage}
         </Text>
       )}
@@ -805,12 +818,23 @@ const TimeClockModal: React.FC<TimeClockModalProps> = ({ isOpen, onClose }) => {
   );
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="full" motionPreset="none">
+    <Modal isOpen={isOpen} onClose={onClose} size="4xl" motionPreset="none" isCentered>
       <ModalOverlay />
-      <ModalContent bg="gray.900" color="white">
-        <ModalCloseButton size="lg" top={5} right={5} zIndex={2} />
-        <ModalBody p={10}>
-          <Box height="calc(100vh - 80px)" overflowY="auto">
+      <ModalContent bg="gray.900" color="white" borderRadius="2xl">
+        <ModalCloseButton size="lg" top={4} right={4} zIndex={2} />
+        <ModalBody p={8}>
+          {/*
+            Height follows the content, floored so the short views (a result,
+            an empty list) do not collapse into a sliver and capped so the
+            keypad still scrolls rather than overflowing a small screen. With
+            eight or so people the grid is two rows, and pinning this to the
+            tallest view would have left most of the dialog empty on the view
+            that opens first. The cap is generous because the keypad view is
+            the tall one and it is the one that must not scroll under a finger,
+            and it subtracts this body's own padding so the dialog can never
+            grow taller than the screen it is on.
+          */}
+          <Box minH={VIEW_MIN_HEIGHT} maxH="calc(85vh - 64px)" overflowY="auto">
             {view === "grid" && renderGrid()}
             {view === "pin" && renderPinView()}
             {view === "choose-pin" && renderChoosePinView()}
